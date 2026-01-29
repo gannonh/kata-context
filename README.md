@@ -1,6 +1,6 @@
 # Kata Context
 
-> **Status: Pre-alpha** — Building in public. Not ready for use.
+> **Status: v0.1.0 (Core Setup)** — Foundation established. Building in public.
 
 ## What This Is
 
@@ -53,7 +53,7 @@ It doesn't care about:
 | **Coupling**     | Tight — hard to leave        | Loose — easy to swap          |
 | **Analogy**      | Rails                        | Postgres                      |
 
-## Usage
+## Usage (Coming Soon)
 
 ```python
 from kata_context import Context
@@ -76,6 +76,32 @@ response = openai.chat.completions.create(
     messages=window,
 )
 ```
+
+## Development
+
+```bash
+# Install dependencies
+pnpm install
+
+# Run tests
+pnpm test
+
+# Lint and format
+pnpm lint
+pnpm format
+
+# Build
+pnpm build
+```
+
+**Stack:** TypeScript 5.9, pnpm, Biome, Vitest, Vercel serverless
+
+## Roadmap
+
+- [x] **v0.1.0** — Core Setup (TypeScript, linting, testing, CI)
+- [ ] **v0.2.0** — Database schema and context engine
+- [ ] **v0.3.0** — TypeScript and Python SDKs
+- [ ] **v1.0** — Hosted API with multi-tenancy
 
 ## License
 
