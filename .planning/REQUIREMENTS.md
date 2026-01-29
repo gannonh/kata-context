@@ -12,14 +12,14 @@
 
 - [x] **TOOL-01**: Biome configured for linting and formatting
 - [x] **TOOL-02**: Vitest configured for TypeScript testing
-- [ ] **TOOL-03**: Pre-commit hooks enforce lint and format via Husky + lint-staged
-- [ ] **TOOL-04**: GitHub Actions CI runs lint and test on push/PR
+- [x] **TOOL-03**: Pre-commit hooks enforce lint and format via Husky + lint-staged
+- [x] **TOOL-04**: GitHub Actions CI runs lint and test on push/PR
 
 ### Vercel Setup
 
-- [ ] **VERCEL-01**: `/api` directory structure for serverless functions
-- [ ] **VERCEL-02**: Health check endpoint at `/api/health.ts` returns status
-- [ ] **VERCEL-03**: Local `vercel build` succeeds without errors
+- [x] **VERCEL-01**: `/api` directory structure for serverless functions
+- [x] **VERCEL-02**: Health check endpoint at `/api/health.ts` returns status
+- [x] **VERCEL-03**: Local `vercel build` succeeds without errors
 
 ---
 
@@ -51,11 +51,11 @@
 | INIT-03 | Phase 1 | Complete |
 | TOOL-01 | Phase 1 | Complete |
 | TOOL-02 | Phase 1 | Complete |
-| TOOL-03 | Phase 2 | Pending |
-| TOOL-04 | Phase 2 | Pending |
-| VERCEL-01 | Phase 2 | Pending |
-| VERCEL-02 | Phase 2 | Pending |
-| VERCEL-03 | Phase 2 | Pending |
+| TOOL-03 | Phase 2 | Complete |
+| TOOL-04 | Phase 2 | Complete |
+| VERCEL-01 | Phase 2 | Complete |
+| VERCEL-02 | Phase 2 | Complete |
+| VERCEL-03 | Phase 2 | Complete |
 
 ---
 *Generated: 2026-01-29*

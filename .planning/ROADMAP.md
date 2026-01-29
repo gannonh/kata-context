@@ -4,11 +4,11 @@
 
 | Milestone | Phases | Status |
 |-----------|--------|--------|
-| v0.1.0 Core Setup | 1-2 | In Progress |
+| v0.1.0 Core Setup | 1-2 | Complete |
 
 ---
 
-### v0.1.0 Core Setup (In Progress)
+### v0.1.0 Core Setup (Complete)
 
 #### Phase 1: Foundation
 
@@ -42,8 +42,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Configure Husky and lint-staged for pre-commit validation
-- [ ] 02-02-PLAN.md — Set up GitHub Actions CI and Vercel health endpoint
+- [x] 02-01-PLAN.md — Configure Husky and lint-staged for pre-commit validation
+- [x] 02-02-PLAN.md — Set up GitHub Actions CI and Vercel health endpoint
 
 **Success Criteria** (what must be TRUE when this phase completes):
 1. Git commit triggers Husky pre-commit hook that runs lint-staged
@@ -59,7 +59,7 @@ Plans:
 | Phase | Name | Status | Requirements |
 |-------|------|--------|--------------|
 | 1 | Foundation | Complete | INIT-01, INIT-02, INIT-03, TOOL-01, TOOL-02 |
-| 2 | Automation and Deployment | Pending | TOOL-03, TOOL-04, VERCEL-01, VERCEL-02, VERCEL-03 |
+| 2 | Automation and Deployment | Complete | TOOL-03, TOOL-04, VERCEL-01, VERCEL-02, VERCEL-03 |
 
 ---
 *Generated: 2026-01-29*
