@@ -13,15 +13,23 @@
     "test:watch": "vitest",
     "lint": "biome lint .",
     "format": "biome format --write .",
-    "check": "biome check --write ."
+    "check": "biome check --write .",
+    "prepare": "husky"
   },
   "keywords": [],
   "author": "",
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.15.0",
+  "lint-staged": {
+    "*.{js,ts,jsx,tsx,json,jsonc}": [
+      "biome check --write --no-errors-on-unmatched --files-ignore-unknown=true"
+    ]
+  },
   "devDependencies": {
     "@biomejs/biome": "2.3.11",
     "@types/node": "24.0.0",
+    "husky": "9.1.7",
+    "lint-staged": "16.2.7",
     "typescript": "5.9.3",
     "vitest": "4.0.17"
   }
