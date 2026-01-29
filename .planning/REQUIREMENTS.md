@@ -46,16 +46,16 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INIT-01 | — | Pending |
-| INIT-02 | — | Pending |
-| INIT-03 | — | Pending |
-| TOOL-01 | — | Pending |
-| TOOL-02 | — | Pending |
-| TOOL-03 | — | Pending |
-| TOOL-04 | — | Pending |
-| VERCEL-01 | — | Pending |
-| VERCEL-02 | — | Pending |
-| VERCEL-03 | — | Pending |
+| INIT-01 | Phase 1 | Pending |
+| INIT-02 | Phase 1 | Pending |
+| INIT-03 | Phase 1 | Pending |
+| TOOL-01 | Phase 1 | Pending |
+| TOOL-02 | Phase 1 | Pending |
+| TOOL-03 | Phase 2 | Pending |
+| TOOL-04 | Phase 2 | Pending |
+| VERCEL-01 | Phase 2 | Pending |
+| VERCEL-02 | Phase 2 | Pending |
+| VERCEL-03 | Phase 2 | Pending |
 
 ---
 *Generated: 2026-01-29*
