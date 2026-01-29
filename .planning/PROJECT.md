@@ -8,21 +8,28 @@ A standalone context policy engine for AI agents. Manages what goes in and out o
 
 Given messages and a context budget, determine the optimal window to send to the model. Policy, not storage.
 
-## Current Milestone: v0.1.0 Core Setup
+## Current State
 
-**Goal:** Establish project foundation with TypeScript/Vercel scaffolding, linting, and testing infrastructure.
+**Shipped:** v0.1.0 Core Setup (2026-01-29)
+- TypeScript/Vercel project foundation
+- Biome linting, Vitest testing, Husky pre-commit hooks
+- GitHub Actions CI pipeline
+- Vercel serverless health endpoint
 
-**Target features:**
-- TypeScript project structure for Vercel serverless
-- Linting configuration (ESLint, Prettier)
-- Testing setup (Vitest or similar)
-- Development workflow (scripts, environment)
+**Next Milestone:** v0.2.0 (not yet planned)
 
 ## Requirements
 
 ### Validated
 
-(None yet — ship to validate)
+- TypeScript with strict mode and NodeNext — v0.1.0
+- pnpm with lockfile — v0.1.0
+- Build, test, lint, format scripts — v0.1.0
+- Biome for linting/formatting — v0.1.0
+- Vitest for testing — v0.1.0
+- Pre-commit hooks with Husky — v0.1.0
+- GitHub Actions CI — v0.1.0
+- Vercel serverless structure — v0.1.0
 
 ### Active
 
@@ -89,15 +96,19 @@ The context layer you'd build yourself, but shouldn't have to. Infrastructure, n
 
 | Decision | Rationale | Outcome |
 | -------- | --------- | ------- |
-| Standalone layer, not framework | Larger market, cleaner differentiation, smaller surface area | — Pending |
-| Fresh codebase, not Letta fork | Avoid rebrand complexity, build what we need | — Pending |
-| Vercel serverless deployment | Simplicity, TypeScript-native, scales automatically | — Pending |
+| Standalone layer, not framework | Larger market, cleaner differentiation, smaller surface area | Good |
+| Fresh codebase, not Letta fork | Avoid rebrand complexity, build what we need | Good |
+| Vercel serverless deployment | Simplicity, TypeScript-native, scales automatically | Good |
 | PostgreSQL with pgvector | Battle-tested, embeddings built-in, Vercel Postgres available | — Pending |
-| TypeScript for server | Vercel-native, faster iteration than Rust, good enough perf for MVP | — Pending |
-| Open source from day one | Builds trust, consistency with other Kata projects, no awkward transition | — Pending |
+| TypeScript for server | Vercel-native, faster iteration than Rust, good enough perf for MVP | Good |
+| Open source from day one | Builds trust, consistency with other Kata projects, no awkward transition | Good |
 | Local beta first, then hosted MVP | Validate with self as customer before commercializing | — Pending |
 | Open core business model | Open source core for adoption, monetize hosted service | — Pending |
-| Small milestones (1-3 phases) | Shippable in a day, maintain momentum | — Pending |
+| Small milestones (1-3 phases) | Shippable in a day, maintain momentum | Good |
+| ESM with type: module | NodeNext resolution requires ESM; Vercel serverless expects ESM | Good |
+| Exact version pinning | Reproducible builds; avoids surprise breakage | Good |
+| Biome over ESLint/Prettier | Faster, simpler config, all-in-one tool | Good |
+| Web Standard APIs for Vercel | No SDK dependency; portable code; modern standard | Good |
 
 ---
-*Last updated: 2025-01-29 after initialization*
+*Last updated: 2026-01-29 after v0.1.0 milestone*
