@@ -18,6 +18,12 @@
 
 **Requirements**: INIT-01, INIT-02, INIT-03, TOOL-01, TOOL-02
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Initialize pnpm project with dependencies and .gitignore
+- [ ] 01-02-PLAN.md — Configure TypeScript, Biome, and Vitest tooling
+
 **Success Criteria** (what must be TRUE when this phase completes):
 1. Developer can run `pnpm install` and get all dependencies installed
 2. Developer can run `pnpm lint` and `pnpm format` with Biome checking TypeScript files
@@ -46,7 +52,7 @@
 
 | Phase | Name | Status | Requirements |
 |-------|------|--------|--------------|
-| 1 | Foundation | Pending | INIT-01, INIT-02, INIT-03, TOOL-01, TOOL-02 |
+| 1 | Foundation | Planned | INIT-01, INIT-02, INIT-03, TOOL-01, TOOL-02 |
 | 2 | Automation and Deployment | Pending | TOOL-03, TOOL-04, VERCEL-01, VERCEL-02, VERCEL-03 |
 
 ---
