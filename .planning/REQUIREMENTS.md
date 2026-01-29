@@ -4,14 +4,14 @@
 
 ### Project Initialization
 
-- [ ] **INIT-01**: TypeScript configured with `strict: true` and `NodeNext` module resolution
-- [ ] **INIT-02**: pnpm initialized as package manager with lock file
-- [ ] **INIT-03**: Package.json includes dev, build, test, lint, and format scripts
+- [x] **INIT-01**: TypeScript configured with `strict: true` and `NodeNext` module resolution
+- [x] **INIT-02**: pnpm initialized as package manager with lock file
+- [x] **INIT-03**: Package.json includes dev, build, test, lint, and format scripts
 
 ### Developer Tooling
 
-- [ ] **TOOL-01**: Biome configured for linting and formatting
-- [ ] **TOOL-02**: Vitest configured for TypeScript testing
+- [x] **TOOL-01**: Biome configured for linting and formatting
+- [x] **TOOL-02**: Vitest configured for TypeScript testing
 - [ ] **TOOL-03**: Pre-commit hooks enforce lint and format via Husky + lint-staged
 - [ ] **TOOL-04**: GitHub Actions CI runs lint and test on push/PR
 
@@ -46,11 +46,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INIT-01 | Phase 1 | Pending |
-| INIT-02 | Phase 1 | Pending |
-| INIT-03 | Phase 1 | Pending |
-| TOOL-01 | Phase 1 | Pending |
-| TOOL-02 | Phase 1 | Pending |
+| INIT-01 | Phase 1 | Complete |
+| INIT-02 | Phase 1 | Complete |
+| INIT-03 | Phase 1 | Complete |
+| TOOL-01 | Phase 1 | Complete |
+| TOOL-02 | Phase 1 | Complete |
 | TOOL-03 | Phase 2 | Pending |
 | TOOL-04 | Phase 2 | Pending |
 | VERCEL-01 | Phase 2 | Pending |
