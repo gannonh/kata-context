@@ -39,6 +39,12 @@ Plans:
 
 **Requirements**: TOOL-03, TOOL-04, VERCEL-01, VERCEL-02, VERCEL-03
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Configure Husky and lint-staged for pre-commit validation
+- [ ] 02-02-PLAN.md — Set up GitHub Actions CI and Vercel health endpoint
+
 **Success Criteria** (what must be TRUE when this phase completes):
 1. Git commit triggers Husky pre-commit hook that runs lint-staged
 2. Pushing to GitHub triggers Actions workflow that runs lint and test
