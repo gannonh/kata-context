@@ -1,4 +1,4 @@
-export function GET(request: Request): Response {
+export function GET(_request: Request): Response {
   return Response.json({
     status: "healthy",
     timestamp: new Date().toISOString(),
