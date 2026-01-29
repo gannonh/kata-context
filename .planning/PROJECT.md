@@ -8,6 +8,16 @@ A standalone context policy engine for AI agents. Manages what goes in and out o
 
 Given messages and a context budget, determine the optimal window to send to the model. Policy, not storage.
 
+## Current Milestone: v0.1.0 Core Setup
+
+**Goal:** Establish project foundation with TypeScript/Vercel scaffolding, linting, and testing infrastructure.
+
+**Target features:**
+- TypeScript project structure for Vercel serverless
+- Linting configuration (ESLint, Prettier)
+- Testing setup (Vitest or similar)
+- Development workflow (scripts, environment)
+
 ## Requirements
 
 ### Validated
