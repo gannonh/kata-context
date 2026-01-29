@@ -6,7 +6,7 @@
 
 Kata Context is a standalone context policy engine for AI agents. It manages what goes in and out of the LLM context window — handling compaction, summarization, retrieval, and budget-aware windowing. Framework-agnostic: works with any agent system, or none.
 
-Part of the Kata ecosystem, alongside [Kata Orchestrator](https://github.com/anthropics/kata-orchestrator).
+Part of the Kata ecosystem, alongside [Kata Orchestrator](https://github.com/gannonh/kata) and [Kata TUI](https://github.com/gannonh/kata-tui).
 
 ## Core Value
 
