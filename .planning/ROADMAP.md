@@ -17,6 +17,12 @@ v0.2.0 establishes the storage foundation for context persistence. Three phases 
 
 **Dependencies:** v0.1.0 project foundation (shipped)
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 03-01-PLAN.md - Install Drizzle ORM, configure connection pooling, define schema
+- [ ] 03-02-PLAN.md - Generate migration, verify database, update health endpoint
+
 **Requirements:**
 - DB-01: PostgreSQL database provisioned on Neon with pgvector extension enabled
 - DB-02: Drizzle ORM configured with type-safe schema definitions
@@ -89,7 +95,7 @@ v0.2.0 establishes the storage foundation for context persistence. Three phases 
 
 | Phase | Name | Status | Plans | Requirements |
 |-------|------|--------|-------|--------------|
-| 3 | Database Foundation | Pending | 0/? | 8 |
+| 3 | Database Foundation | Planned | 0/2 | 8 |
 | 4 | Repository Layer | Pending | 0/? | 6 |
 | 5 | API + Testing Layer | Pending | 0/? | 9 |
 
