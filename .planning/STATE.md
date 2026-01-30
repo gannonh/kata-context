@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-01-29)
 
 ## Current Position
 
-Phase: N/A (between milestones)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-01-29 — v0.1.0 milestone complete
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-01-29 — Milestone v0.2.0 started
 
 ## Progress
 
@@ -35,8 +35,8 @@ See PROJECT.md Key Decisions table for cumulative record.
 
 ### Notes
 - v0.1.0 shipped with full developer workflow and CI infrastructure
-- Ready to start v0.2.0 planning
-- Kata Orchestrator is the first customer
+- v0.2.0 establishes storage foundation before policy engine (v0.3.0)
+- Landing page work moved to kata-site (see HANDOFF-PRODUCT-PORTFOLIO.md)
 - Stack: pnpm 10.x, Node.js 24.x, TypeScript 5.9.x, Biome 2.3.x, Vitest 4.x
 
 ## Session Continuity
