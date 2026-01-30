@@ -6,7 +6,7 @@
 
 - [ ] **DB-01**: PostgreSQL database provisioned on Neon with pgvector extension enabled
 - [ ] **DB-02**: Drizzle ORM configured with type-safe schema definitions
-- [ ] **DB-03**: Database migration workflow established (generate → migrate)
+- [ ] **DB-03**: Database migration workflow established (generate -> migrate)
 - [ ] **DB-04**: Serverless connection pooling configured (@neondatabase/serverless + Vercel Fluid)
 
 ### Schema
@@ -27,12 +27,12 @@
 
 ### API Endpoints
 
-- [ ] **API-01**: POST /api/v1/contexts — create new context, returns context_id
-- [ ] **API-02**: GET /api/v1/contexts/:id — retrieve context with metadata and message count
-- [ ] **API-03**: DELETE /api/v1/contexts/:id — soft delete context
-- [ ] **API-04**: POST /api/v1/contexts/:id/messages — append messages to context
-- [ ] **API-05**: GET /api/v1/contexts/:id/messages — retrieve messages with pagination
-- [ ] **API-06**: GET /api/v1/contexts/:id/window?budget=N — retrieve token-budgeted window
+- [ ] **API-01**: POST /api/v1/contexts - create new context, returns context_id
+- [ ] **API-02**: GET /api/v1/contexts/:id - retrieve context with metadata and message count
+- [ ] **API-03**: DELETE /api/v1/contexts/:id - soft delete context
+- [ ] **API-04**: POST /api/v1/contexts/:id/messages - append messages to context
+- [ ] **API-05**: GET /api/v1/contexts/:id/messages - retrieve messages with pagination
+- [ ] **API-06**: GET /api/v1/contexts/:id/window?budget=N - retrieve token-budgeted window
 
 ### Testing
 
@@ -71,14 +71,32 @@
 
 ## Traceability
 
-| Requirement | Phase | Plan |
-|-------------|-------|------|
-| DB-01..04 | TBD | TBD |
-| SCHEMA-01..04 | TBD | TBD |
-| DATA-01..06 | TBD | TBD |
-| API-01..06 | TBD | TBD |
-| TEST-01..03 | TBD | TBD |
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| DB-01 | Phase 3 | Pending |
+| DB-02 | Phase 3 | Pending |
+| DB-03 | Phase 3 | Pending |
+| DB-04 | Phase 3 | Pending |
+| SCHEMA-01 | Phase 3 | Pending |
+| SCHEMA-02 | Phase 3 | Pending |
+| SCHEMA-03 | Phase 3 | Pending |
+| SCHEMA-04 | Phase 3 | Pending |
+| DATA-01 | Phase 4 | Pending |
+| DATA-02 | Phase 4 | Pending |
+| DATA-03 | Phase 4 | Pending |
+| DATA-04 | Phase 4 | Pending |
+| DATA-05 | Phase 4 | Pending |
+| DATA-06 | Phase 4 | Pending |
+| API-01 | Phase 5 | Pending |
+| API-02 | Phase 5 | Pending |
+| API-03 | Phase 5 | Pending |
+| API-04 | Phase 5 | Pending |
+| API-05 | Phase 5 | Pending |
+| API-06 | Phase 5 | Pending |
+| TEST-01 | Phase 5 | Pending |
+| TEST-02 | Phase 5 | Pending |
+| TEST-03 | Phase 5 | Pending |
 
 ---
 
-*Created: 2026-01-29 | Milestone: v0.2.0 Database + Storage Layer*
+*Created: 2026-01-29 | Updated: 2026-01-30 | Milestone: v0.2.0 Database + Storage Layer*
