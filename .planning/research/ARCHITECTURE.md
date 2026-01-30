@@ -1,601 +1,674 @@
-# Architecture Patterns
+# Architecture: PostgreSQL Storage Layer for Vercel Serverless
 
-**Project:** Kata Context - Context Policy Engine
-**Domain:** REST API with TypeScript/Python SDKs
+**Project:** Kata Context - v0.2.0 Database + Storage Layer
+**Domain:** PostgreSQL storage for context policy engine
 **Researched:** 2026-01-29
+**Confidence:** HIGH
 
 ## Executive Summary
 
-Based on research into Vercel serverless architecture, TypeScript project organization, and multi-language SDK management, I recommend:
+This document defines the PostgreSQL storage layer architecture for Kata Context running on Vercel serverless. The architecture uses Drizzle ORM with Neon PostgreSQL (pgvector enabled), implementing a layered data access pattern optimized for serverless cold starts and connection management.
 
-1. **Monorepo structure** using Turborepo + pnpm workspaces
-2. **Pure serverless API** using Vercel Functions (not Next.js)
-3. **Feature-first organization** within the API package
-4. **Separate SDK packages** co-located in the monorepo
-
-**Confidence:** HIGH for Vercel patterns, MEDIUM for SDK organization (based on industry examples)
-
----
-
-## Recommended Architecture
-
-### Decision: Monorepo (Not Polyrepo)
-
-**Recommendation:** Monorepo with Turborepo + pnpm workspaces
-
-**Rationale:**
-- Single repository enables coordinated releases between API and SDKs
-- Shared TypeScript types between API and TypeScript SDK
-- Unified CI/CD pipeline
-- AI tooling benefits from full context visibility
-- Apache 2.0 licensing applies uniformly
-
-**Trade-off accepted:** Python SDK will need its own tooling (Poetry/pip) within the monorepo, but Turborepo can orchestrate Python builds.
-
-**Sources:**
-- [Turborepo Repository Structure](https://turborepo.dev/docs/crafting-your-repository/structuring-a-repository)
-- [Monorepo vs Polyrepo Analysis](https://www.aviator.co/blog/monorepo-vs-polyrepo/)
-
-### Decision: Pure Vercel Functions (Not Next.js)
-
-**Recommendation:** Use Vercel Functions directly with the `/api` directory pattern
-
-**Rationale:**
-- Kata Context is a REST API, not a web application
-- No need for React, SSR, or frontend routing
-- Zero-configuration deployment with `/api` directory
-- Lower complexity and smaller bundle sizes
-- Direct access to Vercel's Fluid Compute features
-
-**What we avoid:**
-- Next.js App Router vs Pages Router complexity
-- Unnecessary React Server Components
-- Frontend build overhead
-
-**Sources:**
-- [Vercel Functions Documentation](https://vercel.com/docs/functions)
-- [Hosting Backend APIs on Vercel](https://vercel.com/kb/guide/hosting-backend-apis)
+**Key decisions:**
+- Drizzle ORM for type-safe database access (serverless-optimized, zero binary dependencies)
+- Neon PostgreSQL via Vercel Postgres integration (connection pooling built-in)
+- Feature-first directory organization within `/src/db/`
+- Repository pattern for data access abstraction
+- Vercel Fluid Compute connection pooling with `@vercel/functions`
 
 ---
 
 ## Directory Structure
 
-### Complete Monorepo Layout
+### Current Project Structure (v0.1.0)
 
 ```
 kata-context/
-├── .github/
-│   └── workflows/
-│       ├── ci.yml                    # Unified CI pipeline
-│       ├── release-api.yml           # API deployment
-│       ├── release-sdk-ts.yml        # npm publish
-│       └── release-sdk-python.yml    # PyPI publish
+├── api/
+│   └── health.ts           # Vercel Function
+├── src/
+│   └── index.ts            # Package entry (placeholder)
+├── tests/
+├── package.json
+├── tsconfig.json
+└── vercel.json
+```
+
+### Target Structure (v0.2.0)
+
+```
+kata-context/
+├── api/                                # Vercel Functions (HTTP layer)
+│   ├── health.ts
+│   └── v1/
+│       └── contexts/
+│           ├── index.ts                # POST /api/v1/contexts
+│           └── [id].ts                 # GET/PUT/DELETE /api/v1/contexts/:id
 │
-├── .planning/                        # Kata planning artifacts
-│   ├── PROJECT.md
-│   ├── ROADMAP.md
-│   └── research/
-│
-├── apps/
-│   └── api/                          # Vercel serverless API
-│       ├── api/                      # Vercel Functions (route handlers)
-│       │   ├── v1/
-│       │   │   ├── policies/
-│       │   │   │   ├── index.ts      # GET /api/v1/policies
-│       │   │   │   ├── [id].ts       # GET/PUT/DELETE /api/v1/policies/:id
-│       │   │   │   └── evaluate.ts   # POST /api/v1/policies/evaluate
-│       │   │   ├── contexts/
-│       │   │   │   ├── index.ts
-│       │   │   │   └── [id].ts
-│       │   │   └── health.ts         # GET /api/v1/health
-│       │   └── health.ts             # GET /api/health (root health check)
-│       │
-│       ├── src/                      # Application source code
-│       │   ├── domain/               # Core business logic
-│       │   │   ├── policy/
-│       │   │   │   ├── policy.ts
-│       │   │   │   ├── policy.service.ts
-│       │   │   │   └── policy.repository.ts
-│       │   │   └── context/
-│       │   │       ├── context.ts
-│       │   │       ├── context.service.ts
-│       │   │       └── context.repository.ts
-│       │   │
-│       │   ├── infrastructure/       # External integrations
-│       │   │   ├── database/
-│       │   │   │   └── client.ts
-│       │   │   └── cache/
-│       │   │       └── client.ts
-│       │   │
-│       │   ├── shared/               # Cross-cutting concerns
-│       │   │   ├── errors/
-│       │   │   │   └── api-error.ts
-│       │   │   ├── middleware/
-│       │   │   │   ├── auth.ts
-│       │   │   │   └── validation.ts
-│       │   │   └── utils/
-│       │   │       └── response.ts
-│       │   │
-│       │   └── types/                # TypeScript type definitions
-│       │       └── index.ts
-│       │
-│       ├── package.json
-│       ├── tsconfig.json
-│       └── vercel.ts                 # Vercel configuration
-│
-├── packages/
-│   ├── typescript-sdk/               # @kata/context TypeScript SDK
-│   │   ├── src/
-│   │   │   ├── index.ts
-│   │   │   ├── client.ts
-│   │   │   ├── types.ts
-│   │   │   └── errors.ts
-│   │   ├── package.json
-│   │   ├── tsconfig.json
-│   │   └── README.md
+├── src/
+│   ├── index.ts                        # Package exports
 │   │
-│   ├── python-sdk/                   # kata-context Python SDK
-│   │   ├── kata_context/
-│   │   │   ├── __init__.py
-│   │   │   ├── client.py
-│   │   │   ├── types.py
-│   │   │   └── errors.py
-│   │   ├── tests/
-│   │   ├── pyproject.toml
-│   │   └── README.md
+│   ├── db/                             # NEW: Database layer
+│   │   ├── index.ts                    # Database client export
+│   │   ├── client.ts                   # Drizzle client initialization
+│   │   ├── schema/                     # Schema definitions
+│   │   │   ├── index.ts                # Schema barrel export
+│   │   │   ├── context.ts              # Context table schema
+│   │   │   └── context-version.ts      # Context version table schema
+│   │   └── migrations/                 # Generated migrations
+│   │       └── meta/                   # Migration metadata
 │   │
-│   └── shared-types/                 # Shared TypeScript types (optional)
-│       ├── src/
-│       │   └── index.ts
-│       ├── package.json
-│       └── tsconfig.json
+│   ├── repositories/                   # NEW: Data access layer
+│   │   ├── index.ts                    # Repository barrel export
+│   │   ├── context.repository.ts       # Context CRUD operations
+│   │   └── types.ts                    # Repository result types
+│   │
+│   ├── services/                       # NEW: Business logic layer
+│   │   ├── index.ts                    # Service barrel export
+│   │   └── context.service.ts          # Context business logic
+│   │
+│   └── shared/                         # NEW: Cross-cutting concerns
+│       ├── errors/
+│       │   └── index.ts                # Domain errors
+│       └── types/
+│           └── index.ts                # Shared types
 │
-├── turbo.json                        # Turborepo configuration
-├── pnpm-workspace.yaml               # pnpm workspace definition
-├── package.json                      # Root package.json
-├── tsconfig.base.json                # Shared TypeScript config
-├── .eslintrc.js                      # Shared ESLint config
-├── .prettierrc                       # Shared Prettier config
-└── README.md
+├── drizzle.config.ts                   # NEW: Drizzle Kit configuration
+├── package.json
+├── tsconfig.json
+└── vercel.json
 ```
 
-### Key Structural Decisions
+### Directory Purpose Map
 
-#### 1. API Routes in `/api` Directory
-
-Vercel automatically creates serverless functions from files in the `/api` directory. Each file becomes an endpoint:
-
-```
-api/v1/policies/index.ts    -> GET/POST /api/v1/policies
-api/v1/policies/[id].ts     -> GET/PUT/DELETE /api/v1/policies/:id
-api/v1/policies/evaluate.ts -> POST /api/v1/policies/evaluate
-```
-
-**Why this pattern:**
-- Zero-configuration routing
-- File-based routing is explicit and discoverable
-- Dynamic routes via `[param].ts` syntax
-- Vercel handles function bundling automatically
-
-#### 2. Feature-First Domain Organization
-
-Within `/src/domain/`, organize by business domain, not by technical layer:
-
-```
-domain/
-├── policy/           # Everything about policies
-│   ├── policy.ts           # Domain entity
-│   ├── policy.service.ts   # Business logic
-│   └── policy.repository.ts # Data access
-└── context/          # Everything about contexts
-    ├── context.ts
-    ├── context.service.ts
-    └── context.repository.ts
-```
-
-**Why this pattern:**
-- Co-locates related code
-- Scales better than layer-first (controllers/, services/, models/)
-- Easier to reason about a single feature
-- Supports future microservice extraction if needed
-
-#### 3. SDK Package Naming
-
-| Package | npm/PyPI Name | Import |
-|---------|---------------|--------|
-| TypeScript SDK | `@kata/context` | `import { KataContext } from '@kata/context'` |
-| Python SDK | `kata-context` | `from kata_context import KataContext` |
+| Directory | Purpose | Created in Phase |
+|-----------|---------|------------------|
+| `src/db/` | Database client, schema, migrations | Phase 1 |
+| `src/db/schema/` | Table definitions (TypeScript) | Phase 1 |
+| `src/db/migrations/` | SQL migration files (generated) | Phase 1 |
+| `src/repositories/` | Data access abstraction | Phase 2 |
+| `src/services/` | Business logic | Phase 3 |
+| `src/shared/` | Errors, types, utilities | Phase 1-2 |
+| `api/v1/` | Versioned API endpoints | Phase 3 |
 
 ---
 
-## Configuration Files
+## Layer Architecture
 
-### Root package.json
+### Layer Separation
 
-```json
-{
-  "name": "kata-context",
-  "private": true,
-  "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "test": "turbo run test",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
-  },
-  "devDependencies": {
-    "turbo": "^2.x",
-    "prettier": "^3.x",
-    "eslint": "^9.x",
-    "typescript": "^5.x"
-  },
-  "packageManager": "pnpm@9.x"
-}
+```
+┌─────────────────────────────────────────────────────────┐
+│                    HTTP Layer (api/)                     │
+│  Request parsing, validation, response formatting        │
+└───────────────────────────┬─────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│               Service Layer (src/services/)             │
+│  Business logic, orchestration, policy enforcement       │
+└───────────────────────────┬─────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│            Repository Layer (src/repositories/)         │
+│  Data access abstraction, query building                 │
+└───────────────────────────┬─────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│               Database Layer (src/db/)                   │
+│  Drizzle client, schema definitions, connection pool     │
+└───────────────────────────┬─────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│                 Neon PostgreSQL                          │
+│  Serverless Postgres with pgvector                       │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### pnpm-workspace.yaml
+### Layer Responsibilities
 
-```yaml
-packages:
-  - "apps/*"
-  - "packages/*"
-```
+| Layer | Responsibility | Knows About |
+|-------|---------------|-------------|
+| HTTP (`api/`) | Request/response, validation, auth | Services |
+| Service (`services/`) | Business rules, orchestration | Repositories |
+| Repository (`repositories/`) | Data access, query building | Database |
+| Database (`db/`) | Connection, schema, migrations | Neon/Drizzle |
 
-### turbo.json
+**Dependency rule:** Each layer only knows about the layer directly below it.
 
-```json
-{
-  "$schema": "https://turbo.build/schema.json",
-  "tasks": {
-    "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", ".vercel/**"]
-    },
-    "dev": {
-      "cache": false,
-      "persistent": true
-    },
-    "lint": {},
-    "test": {
-      "dependsOn": ["build"]
-    }
-  }
-}
-```
+---
 
-### apps/api/vercel.ts
+## Connection Management
+
+### Serverless Connection Pattern
+
+Vercel Fluid Compute enables safe connection pooling in serverless. Use `attachDatabasePool` to manage connection lifecycle.
+
+**src/db/client.ts:**
 
 ```typescript
-import { routes, type VercelConfig } from '@vercel/config/v1';
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import { attachDatabasePool } from "@vercel/functions";
+import * as schema from "./schema/index.js";
 
-export const config: VercelConfig = {
-  // Enable Fluid Compute for better concurrency
-  fluid: true,
+// Create pool at module scope (reused across invocations)
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 10,                    // Max connections in pool
+  idleTimeoutMillis: 5000,    // Close idle connections after 5s
+  connectionTimeoutMillis: 10000,
+});
 
-  // Clean URLs (no .ts/.js extensions)
-  cleanUrls: true,
+// Attach to Vercel Fluid lifecycle management
+attachDatabasePool(pool);
 
-  // Trailing slash handling
-  trailingSlash: false,
+// Export typed Drizzle instance
+export const db = drizzle(pool, { schema });
 
-  // API versioning via rewrites (optional, for future versions)
-  rewrites: [
-    // Latest version alias
-    routes.rewrite('/api/policies/(.*)', '/api/v1/policies/$1'),
-    routes.rewrite('/api/contexts/(.*)', '/api/v1/contexts/$1'),
-  ],
+// Export pool for direct access if needed
+export { pool };
+```
 
-  // CORS headers for SDK access
-  headers: [
-    routes.header('/api/(.*)', [
-      { key: 'Access-Control-Allow-Origin', value: '*' },
-      { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, DELETE, OPTIONS' },
-      { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization' },
-    ]),
-  ],
+**Key configuration:**
+- `max: 10` - Reasonable pool size for serverless
+- `idleTimeoutMillis: 5000` - Short timeout to release connections quickly
+- `attachDatabasePool` - Ensures connections close before function suspension
 
-  // Function configuration
-  functions: {
-    'api/**/*.ts': {
-      maxDuration: 30,
-    },
+### Connection String Configuration
+
+**Environment variables:**
+
+```bash
+# Pooled connection (for queries)
+DATABASE_URL=postgresql://user:pass@ep-xxx-pooler.region.aws.neon.tech/dbname?sslmode=require
+
+# Direct connection (for migrations)
+DATABASE_URL_DIRECT=postgresql://user:pass@ep-xxx.region.aws.neon.tech/dbname?sslmode=require
+```
+
+**Why two URLs:**
+- Pooled (`-pooler` suffix): Efficient for application queries, handles high concurrency
+- Direct: Required for migrations (DDL statements don't work through PgBouncer)
+
+---
+
+## Schema Organization
+
+### Schema Files
+
+Each domain entity gets its own schema file for maintainability.
+
+**src/db/schema/context.ts:**
+
+```typescript
+import { pgTable, text, timestamp, jsonb, uuid } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
+import { contextVersions } from "./context-version.js";
+
+export const contexts = pgTable("contexts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: text("tenant_id").notNull(),
+  name: text("name").notNull(),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const contextsRelations = relations(contexts, ({ many }) => ({
+  versions: many(contextVersions),
+}));
+```
+
+**src/db/schema/context-version.ts:**
+
+```typescript
+import { pgTable, text, timestamp, jsonb, uuid, integer, index } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
+import { vector } from "drizzle-orm/pg-core";
+import { contexts } from "./context.js";
+
+export const contextVersions = pgTable("context_versions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  contextId: uuid("context_id")
+    .notNull()
+    .references(() => contexts.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  content: jsonb("content").notNull(),
+  embedding: vector("embedding", { dimensions: 1536 }),  // For semantic retrieval
+  tokenCount: integer("token_count"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+}, (table) => [
+  index("context_version_context_idx").on(table.contextId),
+  index("context_version_embedding_idx")
+    .using("hnsw", table.embedding.op("vector_cosine_ops")),
+]);
+
+export const contextVersionsRelations = relations(contextVersions, ({ one }) => ({
+  context: one(contexts, {
+    fields: [contextVersions.contextId],
+    references: [contexts.id],
+  }),
+}));
+```
+
+**src/db/schema/index.ts:**
+
+```typescript
+export * from "./context.js";
+export * from "./context-version.js";
+```
+
+### pgvector Setup
+
+pgvector must be enabled manually before migrations:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+This can be done via Neon console or a pre-migration script.
+
+---
+
+## Repository Pattern
+
+### Repository Interface
+
+Repositories abstract data access, making business logic testable.
+
+**src/repositories/context.repository.ts:**
+
+```typescript
+import { eq, desc } from "drizzle-orm";
+import { db } from "../db/index.js";
+import { contexts, contextVersions } from "../db/schema/index.js";
+
+export type Context = typeof contexts.$inferSelect;
+export type NewContext = typeof contexts.$inferInsert;
+export type ContextVersion = typeof contextVersions.$inferSelect;
+
+export const ContextRepository = {
+  async findById(id: string): Promise<Context | null> {
+    const result = await db
+      .select()
+      .from(contexts)
+      .where(eq(contexts.id, id))
+      .limit(1);
+    return result[0] ?? null;
+  },
+
+  async findByTenant(tenantId: string): Promise<Context[]> {
+    return db
+      .select()
+      .from(contexts)
+      .where(eq(contexts.tenantId, tenantId));
+  },
+
+  async create(data: NewContext): Promise<Context> {
+    const result = await db
+      .insert(contexts)
+      .values(data)
+      .returning();
+    return result[0]!;
+  },
+
+  async update(id: string, data: Partial<NewContext>): Promise<Context | null> {
+    const result = await db
+      .update(contexts)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(contexts.id, id))
+      .returning();
+    return result[0] ?? null;
+  },
+
+  async delete(id: string): Promise<boolean> {
+    const result = await db
+      .delete(contexts)
+      .where(eq(contexts.id, id))
+      .returning({ id: contexts.id });
+    return result.length > 0;
+  },
+
+  async getLatestVersion(contextId: string): Promise<ContextVersion | null> {
+    const result = await db
+      .select()
+      .from(contextVersions)
+      .where(eq(contextVersions.contextId, contextId))
+      .orderBy(desc(contextVersions.version))
+      .limit(1);
+    return result[0] ?? null;
   },
 };
 ```
 
-### apps/api/tsconfig.json
+### Repository Benefits for Serverless
+
+1. **Testability:** Mock repository in tests without database
+2. **Abstraction:** Swap database without changing services
+3. **Query encapsulation:** Complex queries live in one place
+4. **Type safety:** Drizzle infers types from schema
+
+---
+
+## Migration Strategy
+
+### Drizzle Kit Configuration
+
+**drizzle.config.ts:**
+
+```typescript
+import { defineConfig } from "drizzle-kit";
+
+export default defineConfig({
+  dialect: "postgresql",
+  schema: "./src/db/schema/index.ts",
+  out: "./src/db/migrations",
+  dbCredentials: {
+    url: process.env.DATABASE_URL_DIRECT!, // Direct connection for DDL
+  },
+  verbose: true,
+  strict: true,
+});
+```
+
+### Migration Commands
+
+```bash
+# Generate migration from schema changes
+pnpm drizzle-kit generate
+
+# Apply migrations (development)
+pnpm drizzle-kit migrate
+
+# Push schema directly (local development only)
+pnpm drizzle-kit push
+```
+
+### Migration in Production
+
+For Vercel deployment, run migrations as a build step or separate job:
+
+**package.json:**
 
 ```json
 {
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "outDir": "dist",
-    "rootDir": ".",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"]
-    }
-  },
-  "include": ["src/**/*", "api/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push"
+  }
 }
+```
+
+**Option 1: Build-time migration (simple)**
+
+```json
+{
+  "scripts": {
+    "build": "pnpm db:migrate && tsc"
+  }
+}
+```
+
+**Option 2: Separate migration job (recommended for production)**
+
+Use GitHub Actions to run migrations before deployment.
+
+---
+
+## API Integration
+
+### Endpoint Pattern
+
+**api/v1/contexts/index.ts:**
+
+```typescript
+import { ContextService } from "../../../src/services/context.service.js";
+
+export async function GET(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const tenantId = url.searchParams.get("tenantId");
+
+  if (!tenantId) {
+    return Response.json({ error: "tenantId required" }, { status: 400 });
+  }
+
+  const contexts = await ContextService.findByTenant(tenantId);
+  return Response.json({ data: contexts });
+}
+
+export async function POST(request: Request): Promise<Response> {
+  const body = await request.json();
+
+  // Validation here (use zod)
+
+  const context = await ContextService.create(body);
+  return Response.json({ data: context }, { status: 201 });
+}
+```
+
+### Request Flow
+
+```
+POST /api/v1/contexts
+        │
+        ▼
+┌───────────────────┐
+│ api/v1/contexts/  │  Parse request, validate
+│ index.ts          │
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│ ContextService    │  Apply business rules
+│ .create()         │
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│ ContextRepository │  Build query, execute
+│ .create()         │
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│ Drizzle ORM       │  Connection from pool
+│ db.insert()       │
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│ Neon PostgreSQL   │  Execute SQL
+└───────────────────┘
 ```
 
 ---
 
-## Component Boundaries
+## Build Order
 
-### API Layer Responsibilities
+### Phase 1: Database Foundation
 
-| Component | Responsibility | Communicates With |
-|-----------|----------------|-------------------|
-| Route Handlers (`api/`) | HTTP request/response, validation | Domain Services |
-| Domain Services (`src/domain/*/service.ts`) | Business logic, orchestration | Repositories, other Services |
-| Repositories (`src/domain/*/repository.ts`) | Data access abstraction | Infrastructure (Database) |
-| Infrastructure (`src/infrastructure/`) | External service clients | External APIs, databases |
+**Goal:** Schema, migrations, connection working.
 
-### Data Flow
+**Order:**
+1. Install dependencies (`drizzle-orm`, `pg`, `@vercel/functions`)
+2. Create `src/db/client.ts` - connection pool
+3. Create `src/db/schema/context.ts` - context table
+4. Create `drizzle.config.ts`
+5. Generate and run first migration
+6. Verify connection in health endpoint
 
-```
-Request → Route Handler → Validation → Service → Repository → Database
-                                            ↓
-Response ← Route Handler ← Service ← Domain Entity
-```
+**Deliverable:** `pnpm db:migrate` works, health endpoint can query DB.
 
-### SDK Layer Responsibilities
+### Phase 2: Repository Layer
 
-| Component | Responsibility |
-|-----------|----------------|
-| Client | HTTP client wrapper, authentication |
-| Types | TypeScript/Python type definitions matching API |
-| Errors | Domain-specific error handling |
+**Goal:** Type-safe data access abstraction.
+
+**Order:**
+1. Create `src/repositories/context.repository.ts`
+2. Add CRUD operations
+3. Add unit tests (mock db)
+4. Add integration tests (test db)
+
+**Deliverable:** Repository with full CRUD, tested.
+
+### Phase 3: Service + API
+
+**Goal:** Business logic and HTTP endpoints.
+
+**Order:**
+1. Create `src/services/context.service.ts`
+2. Create `api/v1/contexts/index.ts`
+3. Create `api/v1/contexts/[id].ts`
+4. Add request validation (zod)
+5. Add error handling
+
+**Deliverable:** Working CRUD API for contexts.
 
 ---
 
-## Patterns to Follow
+## Serverless-Specific Patterns
 
-### Pattern 1: Vercel Function Handler
+### Cold Start Mitigation
 
-**What:** Standard pattern for Vercel serverless functions with typed request/response.
+1. **Connection pooling at module scope** - Pool created once, reused
+2. **Drizzle lightweight** - No heavy ORM initialization
+3. **Vercel Fluid** - Keeps function warm longer
 
-**When:** Every API route handler.
+### Connection Limits
 
-**Example:**
+Neon pooler supports 10,000 concurrent connections. With Vercel's connection pooling:
+- Function instances share pool within instance
+- `attachDatabasePool` prevents connection leaks
+- Short idle timeout (5s) releases connections quickly
 
-```typescript
-// api/v1/policies/[id].ts
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { PolicyService } from '@/domain/policy/policy.service';
-import { ApiError } from '@/shared/errors/api-error';
-
-export default async function handler(
-  request: VercelRequest,
-  response: VercelResponse
-) {
-  const { id } = request.query;
-
-  if (typeof id !== 'string') {
-    return response.status(400).json({ error: 'Invalid policy ID' });
-  }
-
-  try {
-    switch (request.method) {
-      case 'GET':
-        const policy = await PolicyService.getById(id);
-        if (!policy) {
-          return response.status(404).json({ error: 'Policy not found' });
-        }
-        return response.status(200).json(policy);
-
-      case 'PUT':
-        const updated = await PolicyService.update(id, request.body);
-        return response.status(200).json(updated);
-
-      case 'DELETE':
-        await PolicyService.delete(id);
-        return response.status(204).end();
-
-      default:
-        response.setHeader('Allow', ['GET', 'PUT', 'DELETE']);
-        return response.status(405).json({ error: 'Method not allowed' });
-    }
-  } catch (error) {
-    if (error instanceof ApiError) {
-      return response.status(error.statusCode).json({ error: error.message });
-    }
-    console.error('Unexpected error:', error);
-    return response.status(500).json({ error: 'Internal server error' });
-  }
-}
-```
-
-### Pattern 2: Service Layer Abstraction
-
-**What:** Business logic isolated from HTTP concerns.
-
-**When:** Any non-trivial business logic.
-
-**Example:**
+### Query Patterns for Serverless
 
 ```typescript
-// src/domain/policy/policy.service.ts
-import { PolicyRepository } from './policy.repository';
-import type { Policy, CreatePolicyInput, UpdatePolicyInput } from './policy';
+// GOOD: Single query with joins
+const result = await db.query.contexts.findFirst({
+  where: eq(contexts.id, id),
+  with: { versions: { limit: 1, orderBy: desc(contextVersions.version) } },
+});
 
-export class PolicyService {
-  static async getById(id: string): Promise<Policy | null> {
-    return PolicyRepository.findById(id);
-  }
-
-  static async create(input: CreatePolicyInput): Promise<Policy> {
-    // Business validation
-    this.validatePolicyRules(input.rules);
-
-    return PolicyRepository.create(input);
-  }
-
-  static async evaluate(policyId: string, context: Record<string, unknown>): Promise<boolean> {
-    const policy = await this.getById(policyId);
-    if (!policy) {
-      throw new NotFoundError('Policy not found');
-    }
-
-    // Core evaluation logic
-    return this.evaluateRules(policy.rules, context);
-  }
-
-  private static validatePolicyRules(rules: unknown): void {
-    // Validation logic
-  }
-
-  private static evaluateRules(rules: PolicyRule[], context: Record<string, unknown>): boolean {
-    // Evaluation logic
-  }
-}
-```
-
-### Pattern 3: Shared Types Between API and TypeScript SDK
-
-**What:** Single source of truth for TypeScript types.
-
-**When:** API response shapes, request bodies.
-
-**Example:**
-
-```typescript
-// packages/shared-types/src/index.ts
-export interface Policy {
-  id: string;
-  name: string;
-  description?: string;
-  rules: PolicyRule[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PolicyRule {
-  field: string;
-  operator: 'equals' | 'contains' | 'gt' | 'lt' | 'in';
-  value: unknown;
-}
-
-export interface EvaluationResult {
-  allowed: boolean;
-  policyId: string;
-  matchedRules: string[];
-  evaluatedAt: string;
-}
-
-export interface ApiError {
-  error: string;
-  code?: string;
-  details?: Record<string, unknown>;
-}
+// AVOID: Multiple round trips
+const context = await db.select().from(contexts).where(eq(contexts.id, id));
+const versions = await db.select().from(contextVersions).where(eq(contextVersions.contextId, id));
 ```
 
 ---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Fat Route Handlers
+### 1. Connection Per Request
 
-**What:** Putting business logic directly in route handlers.
+**Wrong:**
+```typescript
+export async function GET() {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const db = drizzle(pool);
+  // ... query
+  await pool.end(); // Connection leak if error thrown before this
+}
+```
 
-**Why bad:**
-- Untestable without HTTP mocking
-- Logic cannot be reused
-- Handlers become unmaintainable
+**Right:** Use module-scope pool with `attachDatabasePool`.
 
-**Instead:**
-- Route handlers only handle HTTP concerns
-- Delegate to service layer for business logic
-- Services are pure functions, easily testable
+### 2. Direct Connection for Queries
 
-### Anti-Pattern 2: Layer-First Organization
+**Wrong:** Using `DATABASE_URL_DIRECT` for application queries (bypasses pooling).
 
-**What:** Organizing by technical layer (`controllers/`, `services/`, `models/`).
+**Right:** Use pooled connection (`-pooler`) for all queries.
 
-**Why bad:**
-- Related code scattered across directories
-- Adding a feature touches many directories
-- Harder to understand feature boundaries
+### 3. Fat API Handlers
 
-**Instead:**
-- Feature-first organization (`policy/`, `context/`)
-- Each feature contains its controller, service, repository
-- Cross-cutting concerns in `shared/`
+**Wrong:** Business logic in route handler.
 
-### Anti-Pattern 3: Next.js for Pure APIs
+**Right:** Handler calls service, service has logic.
 
-**What:** Using Next.js when you only need an API.
+### 4. Skipping Repository Layer
 
-**Why bad:**
-- Unnecessary React/frontend overhead
-- App Router vs Pages Router complexity
-- Larger bundle sizes
-- Build time overhead
+**Wrong:** Services directly use `db.select()`.
 
-**Instead:**
-- Pure Vercel Functions with `/api` directory
-- Only add Next.js if you need a frontend
-
-### Anti-Pattern 4: Polyrepo for Tightly Coupled Components
-
-**What:** Separate repositories for API and SDKs when they share types/releases.
-
-**Why bad:**
-- Version coordination complexity
-- Type drift between API and SDKs
-- Multiple CI/CD pipelines to maintain
-- Harder for contributors
-
-**Instead:**
-- Monorepo with Turborepo
-- Shared types package
-- Coordinated releases
+**Right:** Services call repositories, repositories build queries.
 
 ---
 
-## Scalability Considerations
+## Dependencies
 
-| Concern | At 100 users | At 10K users | At 1M users |
-|---------|--------------|--------------|-------------|
-| **Request handling** | Single region Vercel Functions | Multi-region deployment | Multi-region + edge caching |
-| **Database** | Serverless DB (Turso, Neon) | Serverless DB with read replicas | Dedicated database + caching layer |
-| **Caching** | None needed | Vercel Edge Cache | Redis/Upstash + Edge Cache |
-| **Rate limiting** | Basic (per-IP) | API key based | Token bucket with Redis |
-| **SDK distribution** | npm/PyPI | npm/PyPI + CDN | npm/PyPI + CDN + enterprise support |
+### Production
 
-### Vercel Function Limits to Consider
+```json
+{
+  "dependencies": {
+    "drizzle-orm": "^0.38.x",
+    "pg": "^8.x",
+    "@vercel/functions": "^1.x"
+  }
+}
+```
 
-| Limit | Hobby | Pro | Enterprise |
-|-------|-------|-----|------------|
-| Duration | 10s | 60s (default 15s) | 900s (default 15s) |
-| Memory | 1024MB | Configurable | Configurable |
-| Payload | 4.5MB | 4.5MB | 4.5MB |
+### Development
 
-**Source:** [Vercel Functions Documentation](https://vercel.com/docs/functions)
+```json
+{
+  "devDependencies": {
+    "drizzle-kit": "^0.30.x",
+    "@types/pg": "^8.x"
+  }
+}
+```
+
+### Why These Choices
+
+| Package | Purpose | Why Not Alternative |
+|---------|---------|---------------------|
+| `drizzle-orm` | Type-safe ORM | Lighter than Prisma, no binary, serverless-native |
+| `pg` (node-postgres) | PostgreSQL driver | Most mature, works with `attachDatabasePool` |
+| `@vercel/functions` | Connection lifecycle | Official Vercel helper for Fluid compute |
+| `drizzle-kit` | Migrations | Pairs with drizzle-orm, generates clean SQL |
+
+### Not Using
+
+| Package | Why Not |
+|---------|---------|
+| `@neondatabase/serverless` | Not needed with Fluid compute + pg pooling |
+| `@vercel/postgres` | Deprecated in favor of Neon direct integration |
+| `prisma` | Binary dependencies, slower cold starts |
 
 ---
 
 ## Sources
 
 ### HIGH Confidence (Official Documentation)
-- [Vercel Functions](https://vercel.com/docs/functions) - Serverless function patterns
-- [Vercel vercel.ts Configuration](https://vercel.com/docs/project-configuration/vercel-ts) - Programmatic configuration
-- [Turborepo Repository Structure](https://turborepo.dev/docs/crafting-your-repository/structuring-a-repository) - Monorepo patterns
 
-### MEDIUM Confidence (Verified Patterns)
-- [Hosting Backend APIs on Vercel](https://vercel.com/kb/guide/hosting-backend-apis) - Pure API deployment
-- [Monorepo Tools Comparison](https://monorepo.tools/) - Tool ecosystem overview
+- [Vercel Connection Pooling with Functions](https://vercel.com/kb/guide/connection-pooling-with-functions)
+- [Drizzle ORM PostgreSQL Getting Started](https://orm.drizzle.team/docs/get-started-postgresql)
+- [Drizzle ORM Migrations](https://orm.drizzle.team/docs/migrations)
+- [Drizzle ORM pgvector Guide](https://orm.drizzle.team/docs/guides/vector-similarity-search)
+- [Neon Connection Pooling](https://neon.com/docs/connect/connection-pooling)
+
+### MEDIUM Confidence (Verified Guides)
+
+- [Neon Vercel Connection Methods](https://neon.com/docs/guides/vercel-connection-methods)
+- [Drizzle with Local and Serverless Postgres](https://neon.com/guides/drizzle-local-vercel)
+- [Vercel Fluid Compute Database Pool Management](https://vercel.com/kb/guide/efficiently-manage-database-connection-pools-with-fluid-compute)
 
 ### LOW Confidence (Community Patterns)
-- [Feature-First Organization](https://dev.to/pramod_boda/recommended-folder-structure-for-nodets-2025-39jl) - Modern TypeScript organization
-- [Multi-Language Monorepo Examples](https://github.com/palmerhq/monorepo-starter) - Polyglot monorepo patterns
+
+- Repository pattern implementations (dev.to articles)
+- Directory structure recommendations (various tutorials)
+
+---
+
+*Last updated: 2026-01-29*

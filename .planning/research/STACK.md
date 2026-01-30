@@ -1,299 +1,277 @@
-# Technology Stack
+# Technology Stack: v0.2.0 Database + Storage Layer
 
-**Project:** Kata Context - Context Policy Engine for AI Agents
+**Project:** Kata Context
 **Researched:** 2026-01-29
 **Overall Confidence:** HIGH
 
-## Recommended Stack
+## Executive Summary
 
-### Runtime & Platform
+For PostgreSQL storage with pgvector in a Vercel serverless environment, use **Drizzle ORM** with **Neon direct** (not Vercel Postgres). Vercel Postgres was deprecated in Q4 2024 and transitioned to Neon's native integration. With Vercel Fluid compute (default since April 2025), use WebSocket connections via `@neondatabase/serverless` with connection pooling.
 
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| Node.js | 24.x | Runtime | Current LTS (Krypton), default on Vercel, native TypeScript type stripping support |
-| Vercel Functions | - | Serverless compute | Fluid Compute for efficient concurrency, native TypeScript support, zero config deployment |
-| TypeScript | 5.9.x | Type safety | Latest stable, includes `verbatimModuleSyntax` and `erasableSyntaxOnly` for Node.js native TS support |
+## Existing Stack (from v0.1.0)
 
-**Node.js 24.x Rationale:**
-- Vercel default as of January 2026
-- Active LTS through April 2028
-- Native TypeScript type stripping (no flags needed)
-- Full ESM support without experimental flags
+Already validated and in production:
+- Node.js 24.x
+- TypeScript 5.9.x with strict mode, NodeNext resolution
+- pnpm 10.x
+- Biome 2.3.x
+- Vitest 4.x
+- Vercel Functions (Fluid compute)
 
-### Package Manager
+**Do not re-research these.** Focus below is exclusively on database layer additions.
 
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| pnpm | 10.x | Package management | 70% disk savings vs npm, strict dependency isolation, Vercel auto-detects via pnpm-lock.yaml |
+---
 
-**Why pnpm over alternatives:**
+## New Stack for v0.2.0
 
-| Alternative | Why Not |
-|-------------|---------|
-| npm | Slower installs, no content-addressable storage, phantom dependency issues |
-| yarn | Similar features to pnpm but less mature monorepo support, declining mindshare |
-| bun | Fast but package manager is secondary feature; some ecosystem compatibility gaps; better for runtime than just packages |
-
-**pnpm Detection:**
-Vercel automatically uses `pnpm install` when `pnpm-lock.yaml` is present. No additional configuration needed.
-
-### Linting & Formatting
+### Database Platform
 
 | Technology | Version | Purpose | Rationale |
 |------------|---------|---------|-----------|
-| Biome | 2.3.x | Linting + formatting | 20-35x faster than ESLint+Prettier, single config file, 427 rules, native TypeScript |
+| Neon | managed | PostgreSQL hosting | Vercel Postgres is deprecated and now powered by Neon. Direct Neon is cheaper with identical performance. Native pgvector support. |
 
-**Why Biome over ESLint + Prettier:**
-- **Performance:** Formats 100k+ line codebase in under 1 second vs 10-20 seconds
-- **Simplicity:** One dependency, one config file (`biome.json`) vs 6+ packages and multiple configs
-- **TypeScript-first:** Native support, no plugins needed
-- **97% Prettier compatibility:** Consistent formatting with industry standard
+**Why Neon over Vercel Postgres:**
+- Vercel transitioned all Vercel Postgres stores to Neon's native integration (Q4 2024 - Q1 2025)
+- Vercel Postgres was more expensive with no performance benefits
+- Direct Neon gives access to all Neon features (branching, autoscaling, etc.)
+- Same underlying infrastructure, fewer middlemen
 
-**When ESLint might still be needed:**
-- Custom enterprise compliance rules not available in Biome
-- Legacy projects with extensive custom ESLint plugins
-- This project: Not applicable - new project, Biome sufficient
-
-**Configuration:**
-```json
-{
-  "$schema": "https://biomejs.dev/schemas/2.3.13/schema.json",
-  "organizeImports": { "enabled": true },
-  "linter": {
-    "enabled": true,
-    "rules": { "recommended": true }
-  },
-  "formatter": {
-    "enabled": true,
-    "indentStyle": "space",
-    "indentWidth": 2
-  }
-}
-```
-
-### Testing Framework
+### ORM Layer
 
 | Technology | Version | Purpose | Rationale |
 |------------|---------|---------|-----------|
-| Vitest | 4.x | Unit & integration testing | 10-20x faster than Jest, native ESM/TypeScript, Jest-compatible API |
+| drizzle-orm | 0.45.1 | Database queries | Lightweight (~7kb minified+gzipped), zero binary dependencies, negligible cold start impact. Type-safe SQL. Native pgvector support. |
+| drizzle-kit | 0.31.8 | Migrations | SQL-first migrations, generate + migrate workflow. Custom migrations for pgvector extension. |
 
-**Why Vitest over Jest:**
-- **Performance:** Tests run in 1-2 seconds vs 15-20 seconds for equivalent Jest suites
-- **TypeScript:** Native support, no ts-jest configuration needed
-- **ESM:** First-class support, no experimental flags
-- **Migration path:** 95% Jest API compatibility - can use existing Jest knowledge
+**Why Drizzle over Prisma:**
+- **Cold starts:** Drizzle is ~7kb vs Prisma's heavier footprint. In serverless, this matters.
+- **SQL transparency:** Drizzle generates predictable SQL. You see exactly what runs.
+- **pgvector support:** Native `vector` type in schema, built-in operators for similarity search.
+- **Bundle size:** Critical for serverless functions where every KB affects cold start latency.
+- **No binary engine:** Prisma's Rust query engine (though improved in 2026) still has more overhead.
 
-**When Jest might still be needed:**
-- React Native projects (Jest is mandatory)
-- Existing large Jest test suites where migration cost exceeds benefit
-- This project: Not applicable - greenfield, Vitest is correct choice
+**Note:** Prisma improved significantly in 2026 (no longer uses Rust-based engine for serverless), but Drizzle remains the better choice for this use case due to its SQL-first approach and pgvector integration maturity.
 
-### TypeScript Execution (Development)
-
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| tsx | 4.x | Development TypeScript execution | 20-30x faster than ts-node, native ESM support, sensible defaults |
-
-**Why tsx over alternatives:**
-
-| Alternative | Why Not |
-|-------------|---------|
-| ts-node | Slow startup, complex ESM configuration, requires peer dependencies |
-| Native Node.js (--experimental-strip-types) | Requires Node.js 23.6+ flags for advanced features; tsx more mature for development |
-| Bun | Good but adds runtime complexity; tsx is lighter for just TS execution |
-
-**Note:** tsx is for development execution only. Vercel handles TypeScript compilation for production deployment automatically.
-
-### Build Tooling
+### Database Driver
 
 | Technology | Version | Purpose | Rationale |
 |------------|---------|---------|-----------|
-| tsc | (via TypeScript) | Type checking & declaration generation | Official compiler, required for .d.ts output |
-| Vercel Build | - | Production bundling | Zero-config, optimized for Vercel Functions |
+| @neondatabase/serverless | 1.0.2 | PostgreSQL connections | HTTP/WebSocket driver optimized for serverless. Drop-in `pg` replacement. TypeScript types built-in. |
 
-**Build Strategy:**
-1. **Type checking:** `tsc --noEmit` - validates types without emitting
-2. **Linting:** `biome check .` - fast lint + format check
-3. **Tests:** `vitest run` - fast test execution
-4. **Deployment:** Vercel handles bundling automatically
+**Connection Strategy with Vercel Fluid:**
 
-**What NOT to add:**
-- **esbuild/swc/tsup for bundling:** Vercel bundles functions automatically
-- **Webpack/Rollup:** Overkill for serverless functions, adds complexity
-- **Babel:** TypeScript and Vercel handle transpilation
+Vercel Fluid compute (default since April 2025) changes the calculus:
 
-## TypeScript Configuration
+1. **With Fluid enabled:** Use WebSocket driver with connection pooling via `Pool`. TCP connections can be reused across invocations.
+2. **Classic serverless:** Use HTTP driver (`neon()`) for single queries - fastest for "first query" scenarios.
 
-Recommended `tsconfig.json` for Vercel serverless:
+**Recommendation:** Use WebSocket driver with Pool since Fluid is the default. This provides:
+- Session support for transactions
+- Connection reuse across invocations
+- Lower latency after first connection
+- Full `pg` API compatibility
 
-```json
-{
-  "$schema": "https://json.schemastore.org/tsconfig",
-  "compilerOptions": {
-    "target": "ES2024",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "lib": ["ES2024"],
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "isolatedModules": true,
-    "verbatimModuleSyntax": true,
-    "noEmit": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "types": ["node"]
-  },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
-}
-```
+### pgvector Extension
 
-**Key settings explained:**
-- `module: "NodeNext"` - Node.js ESM with package.json `type` field support
-- `verbatimModuleSyntax: true` - Prevents import/export ambiguity
-- `isolatedModules: true` - Ensures compatibility with single-file transpilers
-- `noEmit: true` - Type check only; Vercel handles compilation
-- `target: "ES2024"` - Node.js 24 supports ES2024 fully
+| Technology | Version | Purpose | Rationale |
+|------------|---------|---------|-----------|
+| pgvector | Neon-managed | Vector similarity search | Native Neon support. Up to 2,000 dimensions for standard vectors. HNSW and IVFFlat indexes. |
 
-**package.json essentials:**
-```json
-{
-  "type": "module",
-  "engines": {
-    "node": "24.x"
-  }
-}
-```
+**Neon pgvector specifics:**
+- Pre-installed, just needs `CREATE EXTENSION vector;`
+- Standard `vector`: up to 2,000 dimensions
+- `halfvec` (half-precision): up to 4,000 dimensions
+- HNSW index recommended for query performance (slower builds but faster queries)
 
-## Supporting Libraries
+### Development Dependencies
 
-| Library | Version | Purpose | When to Add |
-|---------|---------|---------|-------------|
-| @vercel/node | latest | Vercel Function types | Optional - Web standard types preferred |
-| zod | 3.x | Runtime validation | Schema validation for API inputs |
-| drizzle-orm | latest | Database ORM | When connecting to Neon Postgres |
-| @neondatabase/serverless | latest | Neon connection | Serverless-optimized Postgres driver |
+| Technology | Version | Purpose | Rationale |
+|------------|---------|---------|-----------|
+| dotenv | 17.2.3 | Environment variables | Load DATABASE_URL and other config. Standard approach. |
+| ws | 8.19.0 | WebSocket polyfill | Required for Node.js environments (Neon serverless uses WebSockets). |
+| @types/pg | 8.16.0 | TypeScript types | Type definitions for pg compatibility layer. |
 
-**Note:** These are listed for awareness. Add when the specific feature is implemented, not upfront.
+---
+
+## What NOT to Add
+
+| Technology | Reason |
+|------------|--------|
+| **Vercel Postgres SDK** | Deprecated. Vercel transitioned to Neon native integration. Use `@neondatabase/serverless` directly. |
+| **Prisma** | Heavier, more cold start impact, less SQL control. Drizzle is better fit for serverless + pgvector. |
+| **node-postgres (pg)** | Use `@neondatabase/serverless` instead - same API but optimized for serverless. It's a drop-in replacement. |
+| **TypeORM** | Legacy patterns, poor TypeScript inference, slower development velocity. |
+| **Kysely** | Good query builder, but Drizzle provides similar benefits plus schema management and migrations. |
+| **Connection pool libraries (pgBouncer, etc.)** | Neon handles connection pooling server-side. Client-side pooling via `Pool` class is sufficient. |
+
+---
 
 ## Installation
 
-### Initial Setup
-
 ```bash
-# Initialize with pnpm
-pnpm init
-
-# Core dependencies
-pnpm add typescript
+# Production dependencies
+pnpm add drizzle-orm @neondatabase/serverless dotenv
 
 # Development dependencies
-pnpm add -D @types/node vitest tsx biome
-
-# Vercel CLI (optional, for local development)
-pnpm add -D vercel
+pnpm add -D drizzle-kit ws @types/pg
 ```
 
-### Scripts (package.json)
+---
+
+## Configuration Files
+
+### drizzle.config.ts
+
+```typescript
+import 'dotenv/config';
+import { defineConfig } from 'drizzle-kit';
+
+export default defineConfig({
+  schema: './src/db/schema.ts',
+  out: './drizzle',
+  dialect: 'postgresql',
+  dbCredentials: {
+    url: process.env.DATABASE_URL!,
+  },
+});
+```
+
+### vercel.json (Fluid compute explicit)
+
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "fluid": true
+}
+```
+
+Note: Fluid compute is default for new projects since April 2025, but explicit configuration documents intent.
+
+### Database Connection (src/db/index.ts)
+
+```typescript
+import { neonConfig, Pool } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-serverless';
+import ws from 'ws';
+import * as schema from './schema';
+
+// Required for Node.js environments (local dev, tests)
+neonConfig.webSocketConstructor = ws;
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+export const db = drizzle(pool, { schema });
+```
+
+### Schema with pgvector (src/db/schema.ts)
+
+```typescript
+import { index, pgTable, serial, text, timestamp, uuid, vector } from 'drizzle-orm/pg-core';
+
+export const contexts = pgTable(
+  'contexts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    content: text('content').notNull(),
+    embedding: vector('embedding', { dimensions: 1536 }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('contexts_embedding_idx').using('hnsw', table.embedding.op('vector_cosine_ops')),
+  ]
+);
+```
+
+---
+
+## Migration Workflow
+
+```bash
+# Generate migration from schema changes
+pnpm drizzle-kit generate
+
+# Apply migrations to database
+pnpm drizzle-kit migrate
+
+# For pgvector extension (one-time, manual migration):
+pnpm drizzle-kit generate --custom
+# Then add to the generated SQL: CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+**Important:** Drizzle does not auto-create extensions. The pgvector extension must be enabled via a custom migration before any vector columns are used.
+
+---
+
+## Environment Variables
+
+```bash
+# .env.local (development)
+DATABASE_URL=postgresql://[user]:[password]@[neon-hostname]/[dbname]?sslmode=require
+
+# Vercel (production)
+# Set via Vercel dashboard or Neon integration
+# The Neon Vercel integration auto-populates these
+```
+
+---
+
+## Scripts to Add (package.json)
 
 ```json
 {
   "scripts": {
-    "dev": "vercel dev",
-    "build": "tsc --noEmit",
-    "test": "vitest",
-    "test:run": "vitest run",
-    "lint": "biome check .",
-    "lint:fix": "biome check --write .",
-    "format": "biome format --write .",
-    "typecheck": "tsc --noEmit"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   }
 }
 ```
 
-## What NOT to Include
+---
 
-| Technology | Why Avoid |
-|------------|-----------|
-| Jest | Slower, requires configuration for TypeScript/ESM |
-| ESLint + Prettier | Slower, more dependencies, more configuration |
-| ts-node | Slow, complex ESM setup |
-| Webpack/Rollup/esbuild | Vercel handles bundling |
-| Babel | TypeScript and Vercel handle transpilation |
-| nodemon | tsx has built-in watch mode |
-| husky + lint-staged | Add later if needed; not essential for v0.1.0 |
+## Alternatives Considered
 
-## Vercel-Specific Considerations
+| Category | Recommended | Alternative | Why Not |
+|----------|-------------|-------------|---------|
+| ORM | Drizzle | Prisma | Heavier bundle, more cold start latency, less SQL control |
+| ORM | Drizzle | Kysely | No built-in migrations, schema-query disconnect |
+| Database | Neon (direct) | Vercel Postgres | Deprecated, more expensive, same underlying infrastructure |
+| Database | Neon | Supabase | Supabase is great but Neon has better Vercel integration and serverless driver |
+| Driver | @neondatabase/serverless | node-postgres | Neon driver is optimized for serverless, same API |
+| Vector | pgvector | Pinecone/Weaviate | External service adds latency, cost, complexity. pgvector keeps vectors with data. |
 
-### Function Configuration
+---
 
-```typescript
-// api/example.ts
-export const config = {
-  runtime: 'nodejs', // Use Node.js runtime (not Edge)
-  regions: ['iad1'], // Washington D.C. - close to typical database locations
-  maxDuration: 30, // Seconds (Pro plan allows up to 300)
-};
-```
+## Confidence Assessment
 
-### Project Configuration (vercel.json or vercel.ts)
+| Decision | Confidence | Source |
+|----------|------------|--------|
+| Neon over Vercel Postgres | HIGH | [Vercel Postgres Transition Guide](https://neon.com/docs/guides/vercel-postgres-transition-guide), official Vercel deprecation |
+| Drizzle over Prisma | HIGH | [Multiple](https://medium.com/@thebelcoder/prisma-vs-drizzle-orm-in-2026-what-you-really-need-to-know-9598cf4eaa7c) [sources](https://www.thisdot.co/blog/drizzle-orm-a-performant-and-type-safe-alternative-to-prisma), benchmarks, serverless recommendations |
+| @neondatabase/serverless driver | HIGH | [Neon official docs](https://neon.com/docs/serverless/serverless-driver), [Drizzle Neon integration](https://orm.drizzle.team/docs/connect-neon) |
+| WebSocket + Pool for Fluid | HIGH | [Vercel Fluid docs](https://vercel.com/docs/fluid-compute), [Neon connection methods](https://neon.com/docs/guides/vercel-connection-methods) |
+| pgvector on Neon | HIGH | [Neon pgvector docs](https://neon.com/docs/extensions/pgvector), [Drizzle pgvector guide](https://orm.drizzle.team/docs/guides/vector-similarity-search) |
+| Package versions | HIGH | npm registry (verified 2026-01-29) |
 
-For this project, start with `vercel.json`:
-
-```json
-{
-  "functions": {
-    "api/**/*.ts": {
-      "memory": 1024,
-      "maxDuration": 30
-    }
-  }
-}
-```
-
-Consider migrating to `vercel.ts` when dynamic configuration is needed.
-
-### Fluid Compute
-
-Vercel Functions use Fluid Compute by default:
-- Multiple invocations share instances
-- Reduced cold starts
-- Better concurrency for I/O-bound operations (database queries, LLM calls)
-
-No configuration needed - this is automatic.
+---
 
 ## Sources
 
-### Package Managers
-- [pnpm vs npm vs yarn vs Bun: The 2026 Package Manager Showdown](https://dev.to/pockit_tools/pnpm-vs-npm-vs-yarn-vs-bun-the-2026-package-manager-showdown-51dc)
-- [pnpm Official Site](https://pnpm.io/) - Version 10.28.2
+### Official Documentation
+- [Neon Serverless Driver](https://neon.com/docs/serverless/serverless-driver) - Connection setup, Pool vs Client
+- [Neon pgvector Extension](https://neon.com/docs/extensions/pgvector) - Vector types, indexing, limits
+- [Neon Vercel Connection Methods](https://neon.com/docs/guides/vercel-connection-methods) - Fluid vs classic serverless
+- [Vercel Fluid Compute](https://vercel.com/docs/fluid-compute) - Configuration, benefits, pricing
+- [Drizzle + Neon](https://orm.drizzle.team/docs/connect-neon) - Driver setup, HTTP vs WebSocket
+- [Drizzle pgvector Guide](https://orm.drizzle.team/docs/guides/vector-similarity-search) - Schema, queries, indexes
+- [Drizzle Migrations](https://orm.drizzle.team/docs/migrations) - generate, migrate, custom migrations
 
-### Linting & Formatting
-- [Biome Official Site](https://biomejs.dev/) - Version 2.3.13
-- [Biome: The ESLint and Prettier Killer? Complete Migration Guide for 2026](https://dev.to/pockit_tools/biome-the-eslint-and-prettier-killer-complete-migration-guide-for-2026-27m)
-- [Biome vs ESLint: Comparing JavaScript Linters](https://betterstack.com/community/guides/scaling-nodejs/biome-eslint/)
+### Comparison Analysis
+- [Prisma vs Drizzle ORM in 2026](https://medium.com/@thebelcoder/prisma-vs-drizzle-orm-in-2026-what-you-really-need-to-know-9598cf4eaa7c)
+- [Drizzle: A performant and type-safe alternative to Prisma](https://www.thisdot.co/blog/drizzle-orm-a-performant-and-type-safe-alternative-to-prisma)
+- [Node.js ORMs in 2025](https://thedataguy.pro/blog/2025/12/nodejs-orm-comparison-2025/)
 
-### Testing
-- [Vitest Official Site](https://vitest.dev/) - Version 4.0.18
-- [Vitest vs Jest 30: Why 2026 is the Year of Browser-Native Testing](https://dev.to/dataformathub/vitest-vs-jest-30-why-2026-is-the-year-of-browser-native-testing-2fgb)
-- [Jest vs Vitest: Choosing the Right Testing Framework](https://medium.com/on-tech-by-leighton/jest-vs-vitest-choosing-the-right-testing-framework-for-your-typescript-projects-07f23c4aa76c)
-
-### TypeScript
-- [TypeScript 5.9 Documentation](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-9.html)
-- [A Modern Node.js + TypeScript Setup for 2025](https://dev.to/woovi/a-modern-nodejs-typescript-setup-for-2025-nlk)
-- [TSX vs ts-node: The Definitive TypeScript Runtime Comparison](https://betterstack.com/community/guides/scaling-nodejs/tsx-vs-ts-node/)
-
-### Vercel
-- [Vercel Functions Documentation](https://vercel.com/docs/functions)
-- [Vercel Node.js Runtime](https://vercel.com/docs/functions/runtimes/node-js)
-- [Supported Node.js Versions](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions) - Default: Node.js 24.x
-- [Programmatic Configuration with vercel.ts](https://vercel.com/docs/project-configuration/vercel-ts)
-
-### Node.js
-- [Node.js Releases](https://nodejs.org/en/about/previous-releases) - Node.js 24.13.0 LTS
-- [Node.js endoflife.date](https://endoflife.date/nodejs)
+### Version Verification
+- npm registry (queried 2026-01-29): drizzle-orm@0.45.1, drizzle-kit@0.31.8, @neondatabase/serverless@1.0.2, dotenv@17.2.3, ws@8.19.0, @types/pg@8.16.0
