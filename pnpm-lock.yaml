@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@vercel/functions':
-        specifier: 2.1.0
-        version: 2.1.0
+        specifier: 3.4.0
+        version: 3.4.0
       drizzle-orm:
         specifier: 0.45.1
         version: 0.45.1(@types/pg@8.15.2)(pg@8.14.1)
@@ -699,14 +699,18 @@ packages:
   '@types/pg@8.15.2':
     resolution: {integrity: sha512-+BKxo5mM6+/A1soSHBI7ufUglqYXntChLDyTbvcAn1Lawi9J7J9Ok3jt6w7I0+T/UDJ4CyhHk66+GZbwmkYxSg==}
 
-  '@vercel/functions@2.1.0':
-    resolution: {integrity: sha512-1gSbK9zfrbJxk1JTBVERDhLi01mK3fz+gw4GjOjZwHnqs0zsBhQA70HGVtXQX/Z3BTRMfbpAEMVDfhecRw0lDA==}
-    engines: {node: '>= 18'}
+  '@vercel/functions@3.4.0':
+    resolution: {integrity: sha512-lKWDWEhFcpt/zL3ueWqII8W5BY73MC5WUuZyudditbbya6mP8jCLQEuXBxJetpEKgnEn+5xCyK962rw4v1RSVA==}
+    engines: {node: '>= 20'}
     peerDependencies:
       '@aws-sdk/credential-provider-web-identity': '*'
     peerDependenciesMeta:
       '@aws-sdk/credential-provider-web-identity':
         optional: true
+
+  '@vercel/oidc@3.1.0':
+    resolution: {integrity: sha512-Fw28YZpRnA3cAHHDlkt7xQHiJ0fcL+NRcIqsocZQUSmbzeIKRpwttJjik5ZGanXP+vlA4SbTg+AbA3bP363l+w==}
+    engines: {node: '>= 20'}
 
   '@vitest/expect@4.0.17':
     resolution: {integrity: sha512-mEoqP3RqhKlbmUmntNDDCJeTDavDR+fVYkSOw8qRwJFaW/0/5zA9zFeTrHqNtcmwh6j26yMmwx2PqUDPzt5ZAQ==}
@@ -1659,7 +1663,11 @@ snapshots:
       pg-protocol: 1.11.0
       pg-types: 4.1.0
 
-  '@vercel/functions@2.1.0': {}
+  '@vercel/functions@3.4.0':
+    dependencies:
+      '@vercel/oidc': 3.1.0
+
+  '@vercel/oidc@3.1.0': {}
 
   '@vitest/expect@4.0.17':
     dependencies:

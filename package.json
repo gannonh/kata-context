@@ -40,7 +40,7 @@
     "vitest": "4.0.17"
   },
   "dependencies": {
-    "@vercel/functions": "2.1.0",
+    "@vercel/functions": "3.4.0",
     "drizzle-orm": "0.45.1",
     "pg": "8.14.1"
   }
