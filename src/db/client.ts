@@ -1,7 +1,10 @@
 import { attachDatabasePool } from "@vercel/functions";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import pg from "pg";
 import * as schema from "./schema/index.js";
+
+// Handle ESM/CJS interop for pg module
+const { Pool } = pg;
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -26,7 +29,10 @@ const pool = new Pool({
 });
 
 // Vercel Fluid lifecycle management - ensures connections close before function suspension
-attachDatabasePool(pool);
+// Only attach in Vercel environment (not local dev)
+if (process.env.VERCEL) {
+  attachDatabasePool(pool);
+}
 
 export const db = drizzle(pool, { schema });
 export { pool };
