@@ -17,7 +17,10 @@ export const contexts = pgTable("contexts", {
   totalTokens: integer("total_tokens").notNull().default(0),
   latestVersion: bigint("latest_version", { mode: "number" }).notNull().default(0),
   // Self-reference for fork tracking - using AnyPgColumn to avoid circular type inference
-  parentId: uuid("parent_id").references((): AnyPgColumn => contexts.id),
+  // SET NULL on delete: child contexts remain but lose parent reference
+  parentId: uuid("parent_id").references((): AnyPgColumn => contexts.id, {
+    onDelete: "set null",
+  }),
   forkVersion: bigint("fork_version", { mode: "number" }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });

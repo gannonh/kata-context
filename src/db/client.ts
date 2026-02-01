@@ -13,10 +13,16 @@ if (!connectionString) {
 }
 
 // Verify pooled connection string (must contain -pooler)
+// In production/Vercel, fail fast on misconfiguration to prevent connection exhaustion
 if (!connectionString.includes("-pooler")) {
-  console.warn(
-    "WARNING: DATABASE_URL does not contain -pooler. Use pooled connection string for serverless.",
-  );
+  const warningMessage =
+    "DATABASE_URL does not contain -pooler. Non-pooled connections may exhaust under serverless load.";
+
+  if (process.env.VERCEL) {
+    throw new Error(`CRITICAL: ${warningMessage}`);
+  }
+
+  console.warn(`WARNING: ${warningMessage}`);
 }
 
 // Conservative pool settings for serverless
@@ -26,6 +32,15 @@ const pool = new Pool({
   max: 3,
   idleTimeoutMillis: 5000,
   connectionTimeoutMillis: 10000,
+});
+
+// Handle pool-level errors (connection drops, network issues)
+// Without this handler, errors become unhandled promise rejections
+pool.on("error", (err) => {
+  console.error("[db] Unexpected pool error:", {
+    message: err.message,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Vercel Fluid lifecycle management - ensures connections close before function suspension

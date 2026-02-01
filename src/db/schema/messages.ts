@@ -2,6 +2,7 @@ import {
   bigint,
   index,
   integer,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -11,16 +12,20 @@ import {
 } from "drizzle-orm/pg-core";
 import { contexts } from "./contexts.js";
 
+// Message roles - enforced at database level via pgEnum
+export const messageRoleEnum = pgEnum("message_role", ["user", "assistant", "system", "tool"]);
+
 export const messages = pgTable(
   "messages",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // CASCADE delete: when context is deleted, all its messages are deleted
     contextId: uuid("context_id")
       .notNull()
-      .references(() => contexts.id),
+      .references(() => contexts.id, { onDelete: "cascade" }),
     version: bigint("version", { mode: "number" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    role: text("role").notNull(), // 'user' | 'assistant' | 'system' | 'tool'
+    role: messageRoleEnum("role").notNull(),
     content: text("content").notNull(),
     toolCallId: text("tool_call_id"),
     toolName: text("tool_name"),

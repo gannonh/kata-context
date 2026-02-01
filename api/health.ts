@@ -44,10 +44,14 @@ export async function GET(_request: Request): Promise<Response> {
       pooled: isPooled,
     };
   } catch (error) {
+    // Log full error details for observability (server-side only)
+    console.error("[health] Database check failed:", error);
+
     response.status = "unhealthy";
     response.checks.database = {
       status: "disconnected",
-      error: error instanceof Error ? error.message : "Unknown database error",
+      // Return generic message to avoid leaking internal details
+      error: "Database connection failed",
     };
 
     return Response.json(response, { status: 503 });
