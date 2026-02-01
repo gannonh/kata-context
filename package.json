@@ -4,7 +4,7 @@
   "description": "A standalone context policy engine for AI agents",
   "type": "module",
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=20.0.0"
   },
   "scripts": {
     "dev": "tsc --watch",
@@ -18,7 +18,8 @@
     "db:generate": "tsx node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "tsx node_modules/drizzle-kit/bin.cjs migrate",
     "db:push": "tsx node_modules/drizzle-kit/bin.cjs push",
-    "db:studio": "tsx node_modules/drizzle-kit/bin.cjs studio"
+    "db:studio": "tsx node_modules/drizzle-kit/bin.cjs studio",
+    "dev:local": "tsx --env-file=.env scripts/dev-server.ts"
   },
   "keywords": [],
   "author": "",
@@ -44,5 +45,15 @@
     "@vercel/functions": "3.4.0",
     "drizzle-orm": "0.45.1",
     "pg": "8.14.1"
+  },
+  "pnpm": {
+    "allowedDeprecatedVersions": {},
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ],
+    "allowBuild": [
+      "esbuild",
+      "@esbuild/*"
+    ]
   }
 }
