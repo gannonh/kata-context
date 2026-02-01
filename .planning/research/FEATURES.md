@@ -1,242 +1,395 @@
-# Feature Landscape: TypeScript/Vercel Project Scaffold
+# Feature Landscape: Context Storage Layer
 
-**Domain:** TypeScript serverless project scaffolding for Vercel
+**Domain:** AI Agent Context Storage and Management
 **Researched:** 2026-01-29
-**Focus:** v0.1.0 Core Setup milestone
+**Focus:** v0.2.0 Database + Storage Layer milestone
+**Overall Confidence:** HIGH
+
+## Executive Summary
+
+A context storage layer for AI agents must solve the fundamental problem: given potentially unlimited conversation history, efficiently store, version, and retrieve the optimal subset for each model call. This is not a generic database problem - it requires purpose-built abstractions for versioned message storage, efficient windowing, and preparation for semantic retrieval.
+
+Based on research into LangGraph memory patterns, event sourcing for conversation history, and pgvector best practices, I recommend a **tiered storage model** with **event-sourced conversation logs**, **snapshot-based retrieval optimization**, and **cursor-based pagination** for windowing operations.
+
+---
 
 ## Table Stakes
 
-Features users expect. Missing = project feels incomplete or unprofessional.
+Features users expect. Missing = storage layer feels incomplete or unusable for AI agent applications.
 
-| Feature | Why Expected | Complexity | Scaffolding vs Later | Notes |
-|---------|-------------|------------|---------------------|-------|
-| TypeScript configuration (tsconfig.json) | Modern TS projects require explicit config | Low | **Scaffolding** | Use `strict: true` baseline |
-| ESLint configuration | Code quality enforcement expected | Low | **Scaffolding** | Flat config format (eslint.config.js) |
-| Prettier configuration | Consistent formatting expected | Low | **Scaffolding** | .prettierrc with sensible defaults |
-| .gitignore | Must exclude node_modules, .env, build artifacts | Low | **Scaffolding** | Include Vercel-specific entries |
-| package.json scripts | `dev`, `build`, `test`, `lint` expected | Low | **Scaffolding** | Core developer commands |
-| Vercel serverless structure | `/api` directory with function files | Low | **Scaffolding** | Vercel auto-detects this |
-| Environment variable handling | .env.example documenting required vars | Low | **Scaffolding** | Never commit actual .env files |
-| Node.js version specification | Reproducible builds require pinned version | Low | **Scaffolding** | Use .nvmrc or engines in package.json |
-| README with setup instructions | Developers expect onboarding docs | Low | **Scaffolding** | Basic setup, not full documentation |
+| Feature | Why Expected | Complexity | v0.2.0 Scope | Notes |
+|---------|-------------|------------|--------------|-------|
+| **Message persistence** | Core requirement - agents need conversation history | Low | **Yes** | Store user messages, assistant responses, tool calls, tool results |
+| **Session/conversation isolation** | Multiple conversations must not leak into each other | Low | **Yes** | Session-scoped storage with unique identifiers |
+| **Message ordering** | Conversation flow requires strict ordering | Low | **Yes** | Timestamp + sequence number for consistent ordering |
+| **Metadata storage** | Token counts, model info, timestamps essential for windowing | Low | **Yes** | Structured metadata alongside message content |
+| **Basic CRUD operations** | Create, read, update, delete contexts and messages | Low | **Yes** | REST API for context management |
+| **Serverless-optimized connections** | Vercel functions require connection pooling | Medium | **Yes** | Neon serverless driver handles this automatically |
+| **Database migrations** | Schema evolution is inevitable | Medium | **Yes** | Drizzle ORM migrations or similar |
+| **Soft delete** | Audit requirements, recovery from mistakes | Low | **Yes** | `deleted_at` timestamp rather than hard delete |
 
-**Confidence:** HIGH - Based on [Vercel official documentation](https://vercel.com/docs/functions) and [TypeScript best practices](https://www.typescriptlang.org/tsconfig/).
+**Confidence:** HIGH - Based on [LangGraph memory documentation](https://docs.langchain.com/oss/python/langgraph/memory), [AWS DynamoDB chatbot patterns](https://aws.amazon.com/blogs/database/amazon-dynamodb-data-models-for-generative-ai-chatbots/), and [Google ADK context architecture](https://developers.googleblog.com/architecting-efficient-context-aware-multi-agent-framework-for-production/).
+
+---
 
 ## Differentiators
 
-Features that set quality projects apart. Not expected, but valued by experienced developers.
+Features that set Kata Context apart from generic storage. These enable the policy engine (v0.3.0+) to function effectively.
 
-| Feature | Value Proposition | Complexity | Scaffolding vs Later | Notes |
-|---------|------------------|------------|---------------------|-------|
-| Pre-commit hooks (Husky + lint-staged) | Prevents bad commits from entering repo | Medium | **Scaffolding** | Essential for solo dev maintaining quality |
-| Vitest test configuration | Modern, fast testing with TS support | Medium | **Scaffolding** | Better DX than Jest for Vite/Vercel |
-| Strict TypeScript settings | Catches more bugs at compile time | Low | **Scaffolding** | Enable strictNullChecks, noUncheckedIndexedAccess |
-| Type-checked ESLint rules | TypeScript-specific linting | Low | **Scaffolding** | @typescript-eslint/eslint-plugin |
-| vercel.json configuration | Explicit function memory/duration limits | Low | **Scaffolding** | Avoids surprises in production |
-| GitHub Actions CI workflow | Automated lint/test on PRs | Medium | **Scaffolding** | Simple workflow, not full CD |
-| EditorConfig | Consistent settings across editors | Low | **Scaffolding** | .editorconfig file |
-| VS Code workspace settings | Editor integration for linting/formatting | Low | **Scaffolding** | .vscode/settings.json |
+| Feature | Value Proposition | Complexity | v0.2.0 Scope | Notes |
+|---------|------------------|------------|--------------|-------|
+| **Full version history** | Every message append creates a new version - enables time-travel | Medium | **Yes** | Event sourcing pattern; immutable message log |
+| **Point-in-time retrieval** | Retrieve context state at any version | Medium | **Yes** | Reconstruct state from event log |
+| **Cursor-based windowing** | Efficient retrieval for token-budget-constrained windows | Medium | **Yes** | Better than offset pagination for large conversations |
+| **Token count pre-computation** | Store token counts with messages for O(1) budget checking | Low | **Yes** | Avoid re-tokenizing on every retrieval |
+| **Role-based message types** | Distinguish user/assistant/system/tool messages | Low | **Yes** | Schema design, not just string field |
+| **pgvector column** | Prepared for semantic retrieval (embeddings) | Low | **Yes, schema only** | Add column, don't populate yet |
+| **Context forking** | Branch a conversation for exploration | Medium | **Partial** | Design for it, implement basic version |
+| **Batch operations** | Efficient bulk inserts for conversation imports | Medium | **Defer** | Not critical for v0.2.0 |
+| **Snapshot optimization** | Periodic state snapshots for faster reconstruction | Medium | **Defer** | Optimization for large conversations |
 
-**Confidence:** HIGH - Based on [ESLint + Prettier 2026 patterns](https://medium.com/@osmion/prettier-eslint-configuration-that-actually-works-without-the-headaches-a8506b710d21), [Vitest documentation](https://vitest.dev/config/), and [Husky/lint-staged best practices](https://github.com/lint-staged/lint-staged).
+**Confidence:** HIGH - Based on [event sourcing patterns](https://martinfowler.com/eaaDev/EventSourcing.html), [LangGraph persistence](https://www.mongodb.com/company/blog/product-release-announcements/powering-long-term-memory-for-agents-langgraph), and [Letta memory blocks](https://www.letta.com/blog/memory-blocks).
+
+---
 
 ## Anti-Features
 
-Features to explicitly NOT include in scaffolding phase. Common mistakes in project setup.
+Features to explicitly NOT build in v0.2.0. Common mistakes in AI agent storage systems.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|----------|-------------------|
-| Full GitHub Actions CD pipeline | Premature optimization; Vercel auto-deploys from Git | Use Vercel's built-in Git integration for deployments; CI only for lint/test |
-| Database configuration | Not needed until data layer milestone | Add when implementing storage layer |
-| API routes with business logic | Scaffolding should be empty shell | Create single hello-world health check only |
-| Authentication/authorization | Separate concern, adds complexity | Defer to security milestone |
-| Logging infrastructure | Overengineering for scaffold | Use console.log initially; add structured logging later |
-| Error monitoring (Sentry, etc.) | Not needed until production traffic | Add during production hardening |
-| Complex folder structure | Premature architecture; let structure emerge | Minimal: `/api`, `/src`, `/tests` |
-| Monorepo setup | Single package until proven need | Start simple; refactor if SDKs require |
-| Docker/containerization | Vercel handles deployment; Docker adds complexity | Skip unless local development requires it |
-| Documentation beyond README | Writing docs for unwritten code | Create docs as features ship |
-| Multiple environment configs | One environment (development) is enough to start | Add staging/production configs when needed |
-| Custom build tooling (webpack, rollup) | Vercel handles bundling | Trust Vercel's build system |
-| API versioning | No API to version yet | Add `/v1/` prefix when API stabilizes |
-| Rate limiting | No traffic to limit | Add during production hardening |
+| **Embedding computation** | Adds complexity, requires model calls, separate concern | Add pgvector column in schema, populate in v0.3.0+ |
+| **Semantic search** | Requires embeddings; premature without policy engine | Store vectors when available, search in future milestone |
+| **Automatic summarization** | LLM calls in storage layer conflate concerns | Storage stores; policy engine (v0.3.0) decides when to summarize |
+| **Full chat history in every response** | Token bloat, cost explosion | Cursor-based retrieval, let policy engine decide window |
+| **Real-time sync/streaming** | Websockets add complexity, not needed for MVP | REST API sufficient; add streaming when there's demand |
+| **Multi-tenant isolation** | Authentication/authorization is separate concern | Single-tenant for v0.2.0; add multi-tenancy in commercial milestone |
+| **Caching layer** | Premature optimization | PostgreSQL is fast enough for MVP; add Redis when needed |
+| **Knowledge graph storage** | Different concern than conversation context | Focus on message sequences; knowledge graphs are future scope |
+| **Cross-session memory** | Requires memory consolidation logic (complex) | Session-scoped only for v0.2.0; long-term memory in future |
+| **Message editing/mutation** | Violates immutability principle, complicates versioning | Append-only with soft delete; "edits" create new versions |
+| **Complex query DSL** | Overengineering; REST with filters is sufficient | Simple query parameters for filtering |
+| **Automatic cleanup/retention** | Policy decision, not storage decision | Manual delete; add retention policies later |
 
-**Confidence:** HIGH - Based on [Vercel's zero-config philosophy](https://vercel.com/docs/project-configuration) and common scaffolding anti-patterns observed in ecosystem research.
+**Confidence:** HIGH - Based on [AI agent memory anti-patterns](https://www.ais.com/practical-memory-patterns-for-reliable-longer-horizon-agent-workflows/), [common mistakes in agent memory](https://medium.com/@DanGiannone/the-problem-with-ai-agent-memory-9d47924e7975), and [InfoWorld analysis](https://www.infoworld.com/article/4101981/ai-memory-is-just-another-database-problem.html).
+
+---
 
 ## Feature Dependencies
 
 ```
-tsconfig.json
+PostgreSQL Schema
     |
-    v
-ESLint config (depends on TS types)
+    +-- Message table (core entity)
+    |       |
+    |       +-- Context/Session table (groups messages)
+    |       |
+    |       +-- Version tracking (implicit via immutable appends)
     |
-    v
-Prettier (must be last in ESLint extends)
+    +-- pgvector extension (enabled but unused in v0.2.0)
+            |
+            +-- Embedding column (nullable, for v0.3.0+)
+
+Connection Handling
     |
-    v
-lint-staged (runs ESLint + Prettier)
+    +-- Neon serverless driver (@neondatabase/serverless)
+    |       |
+    |       +-- Automatic connection pooling
     |
-    v
-Husky (triggers lint-staged on commit)
+    +-- Drizzle ORM
+            |
+            +-- Type-safe queries
+            |
+            +-- Migration management
+
+API Operations
     |
-    v
-CI workflow (runs same lint/test commands)
+    +-- Context CRUD
+    |       |
+    |       +-- Create context (returns context_id)
+    |       |
+    |       +-- Get context (with pagination)
+    |       |
+    |       +-- Delete context (soft delete)
+    |
+    +-- Message Operations
+            |
+            +-- Append message (immutable)
+            |
+            +-- Get messages (cursor-based)
+            |
+            +-- Get at version (point-in-time)
 ```
 
+---
+
+## Core Schema Design
+
+### Messages Table (Event Log)
+
+The heart of the storage layer. Each row is an immutable event.
+
+```sql
+CREATE TABLE messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    context_id UUID NOT NULL REFERENCES contexts(id),
+
+    -- Ordering
+    version BIGINT NOT NULL,           -- Auto-incrementing per context
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- Content
+    role TEXT NOT NULL,                -- 'user' | 'assistant' | 'system' | 'tool'
+    content TEXT NOT NULL,
+
+    -- Tool-specific (nullable)
+    tool_call_id TEXT,
+    tool_name TEXT,
+
+    -- Metadata (denormalized for query efficiency)
+    token_count INTEGER,               -- Pre-computed for windowing
+    model TEXT,                        -- Model that generated (for assistant)
+
+    -- Soft delete
+    deleted_at TIMESTAMPTZ,
+
+    -- Future: embeddings
+    embedding VECTOR(1536),            -- Nullable, for v0.3.0+
+
+    -- Constraints
+    UNIQUE(context_id, version)
+);
+
+CREATE INDEX idx_messages_context_version ON messages(context_id, version);
+CREATE INDEX idx_messages_context_created ON messages(context_id, created_at);
 ```
-package.json scripts
-    |
-    +-- dev (vercel dev)
-    |
-    +-- build (type check)
-    |
-    +-- test (vitest)
-    |
-    +-- lint (eslint + prettier check)
-    |
-    +-- format (prettier write)
+
+### Contexts Table (Session Container)
+
+Groups messages into logical conversations.
+
+```sql
+CREATE TABLE contexts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    -- Metadata
+    name TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- Denormalized for efficiency
+    message_count INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    latest_version BIGINT NOT NULL DEFAULT 0,
+
+    -- Forking support
+    parent_id UUID REFERENCES contexts(id),
+    fork_version BIGINT,               -- Version forked from
+
+    -- Soft delete
+    deleted_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_contexts_parent ON contexts(parent_id) WHERE parent_id IS NOT NULL;
 ```
 
-## Scaffolding Checklist
+**Why this design:**
+- **Immutable messages:** Append-only enables versioning without complexity
+- **Pre-computed token_count:** O(1) budget checking instead of O(n) tokenization
+- **Denormalized counters:** Avoid COUNT(*) queries on large tables
+- **Version as BIGINT:** Supports billions of messages per context
+- **Cursor-based retrieval:** Use `(context_id, version)` for efficient pagination
 
-For v0.1.0 Core Setup, include these files:
+**Confidence:** HIGH - Based on [pgvector schema patterns](https://supabase.com/docs/guides/database/extensions/pgvector), [event sourcing best practices](https://microservices.io/patterns/data/event-sourcing.html), and [DynamoDB chatbot models](https://aws.amazon.com/blogs/database/amazon-dynamodb-data-models-for-generative-ai-chatbots/).
 
-### Configuration Files
-- [ ] `tsconfig.json` - Strict TypeScript configuration
-- [ ] `eslint.config.js` - Flat ESLint config with TypeScript and Prettier
-- [ ] `.prettierrc` - Formatter settings
-- [ ] `.prettierignore` - Exclude build artifacts
-- [ ] `vercel.json` - Function configuration
-- [ ] `.gitignore` - Standard Node + Vercel ignores
-- [ ] `.nvmrc` - Node version (20 LTS recommended)
-- [ ] `.editorconfig` - Cross-editor settings
+---
 
-### Developer Experience
-- [ ] `.vscode/settings.json` - Format on save, ESLint integration
-- [ ] `.vscode/extensions.json` - Recommended extensions
-- [ ] `.husky/pre-commit` - Run lint-staged
-- [ ] `lint-staged` config in package.json
+## Retrieval Patterns
 
-### CI/CD
-- [ ] `.github/workflows/ci.yml` - Lint and test on PR
+### Pattern 1: Latest N Messages (Most Common)
 
-### Documentation
-- [ ] `README.md` - Setup instructions, available scripts
-- [ ] `.env.example` - Document required environment variables
+```sql
+-- Get last 50 messages, newest first
+SELECT * FROM messages
+WHERE context_id = $1 AND deleted_at IS NULL
+ORDER BY version DESC
+LIMIT 50;
+```
 
-### Source Structure
-- [ ] `/api/health.ts` - Health check endpoint (hello world)
-- [ ] `/src/` - Empty directory for shared code (placeholder)
-- [ ] `/tests/` - Empty directory for tests (placeholder)
-- [ ] `/tests/health.test.ts` - Smoke test for health endpoint
+### Pattern 2: Token-Budgeted Window
 
-## Recommended Configuration Details
+```sql
+-- Get messages fitting within token budget, newest first
+WITH cumulative AS (
+    SELECT *,
+           SUM(token_count) OVER (ORDER BY version DESC) AS running_total
+    FROM messages
+    WHERE context_id = $1 AND deleted_at IS NULL
+)
+SELECT * FROM cumulative
+WHERE running_total <= $2  -- token budget
+ORDER BY version ASC;      -- return in chronological order
+```
 
-### tsconfig.json (Strict)
+### Pattern 3: Point-in-Time Retrieval
 
-Key settings for production TypeScript:
+```sql
+-- Get context state at specific version
+SELECT * FROM messages
+WHERE context_id = $1
+  AND version <= $2        -- version to retrieve
+  AND deleted_at IS NULL
+ORDER BY version ASC;
+```
 
-```json
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "isolatedModules": true,
-    "outDir": "./dist",
-    "rootDir": "."
-  }
+### Pattern 4: Cursor-Based Pagination
+
+```sql
+-- Get next page after cursor (version)
+SELECT * FROM messages
+WHERE context_id = $1
+  AND version > $2         -- cursor (last seen version)
+  AND deleted_at IS NULL
+ORDER BY version ASC
+LIMIT 100;
+```
+
+**Why cursor-based over offset:**
+- O(1) performance regardless of offset depth
+- Stable during concurrent writes
+- Natural fit for versioned data
+- [Better pagination performance](https://betterprogramming.pub/why-token-based-pagination-performs-better-than-offset-based-465e1139bb33)
+
+---
+
+## API Surface for v0.2.0
+
+### Context Endpoints
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/api/v1/contexts` | Create new context |
+| GET | `/api/v1/contexts/:id` | Get context metadata |
+| GET | `/api/v1/contexts/:id/messages` | Get messages (paginated) |
+| DELETE | `/api/v1/contexts/:id` | Soft delete context |
+
+### Message Endpoints
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/api/v1/contexts/:id/messages` | Append message |
+| GET | `/api/v1/contexts/:id/messages?version=N` | Get at version |
+| GET | `/api/v1/contexts/:id/messages?cursor=X&limit=Y` | Cursor pagination |
+| GET | `/api/v1/contexts/:id/messages?token_budget=N` | Token-budgeted window |
+
+### Response Shapes
+
+```typescript
+interface Context {
+  id: string;
+  name: string | null;
+  messageCount: number;
+  totalTokens: number;
+  latestVersion: number;
+  parentId: string | null;
+  forkVersion: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Message {
+  id: string;
+  contextId: string;
+  version: number;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string;
+  toolCallId: string | null;
+  toolName: string | null;
+  tokenCount: number | null;
+  model: string | null;
+  createdAt: string;
+}
+
+interface PaginatedMessages {
+  messages: Message[];
+  cursor: number | null;  // Next version to fetch, null if no more
+  hasMore: boolean;
 }
 ```
 
-**Confidence:** HIGH - Based on [TypeScript TSConfig reference](https://www.typescriptlang.org/tsconfig/) and [strict mode recommendations](https://www.typescriptlang.org/tsconfig/strict.html).
-
-### ESLint Flat Config
-
-Modern ESLint 9+ configuration:
-
-```javascript
-import js from "@eslint/js";
-import tseslint from "typescript-eslint";
-import eslintConfigPrettier from "eslint-config-prettier";
-
-export default [
-  js.configs.recommended,
-  ...tseslint.configs.strict,
-  eslintConfigPrettier,
-  {
-    files: ["**/*.ts"],
-    rules: {
-      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
-      "@typescript-eslint/no-explicit-any": "error"
-    }
-  }
-];
-```
-
-**Confidence:** HIGH - Based on [ESLint + Prettier 2026 integration patterns](https://www.joshuakgoldberg.com/blog/configuring-eslint-prettier-and-typescript-together/).
-
-### Vitest Configuration
-
-Minimal vitest.config.ts:
-
-```typescript
-import { defineConfig } from 'vitest/config';
-
-export default defineConfig({
-  test: {
-    globals: true,
-    environment: 'node',
-    include: ['tests/**/*.test.ts']
-  }
-});
-```
-
-**Confidence:** HIGH - Based on [Vitest official documentation](https://vitest.dev/config/) and [2026 testing recommendations](https://dev.to/dataformathub/vitest-vs-jest-30-why-2026-is-the-year-of-browser-native-testing-2fgb).
+---
 
 ## MVP Recommendation
 
-For v0.1.0 Core Setup milestone:
+### Must Include (Ship-blocking for v0.2.0)
 
-**Must Include (Ship-blocking):**
-1. TypeScript configuration with strict mode
-2. ESLint + Prettier with working integration
-3. Vitest with at least one passing test
-4. Pre-commit hooks preventing bad commits
-5. Basic CI workflow (lint + test)
-6. Health check endpoint proving serverless works
+1. **PostgreSQL schema** with messages and contexts tables
+2. **pgvector extension enabled** (column added, not populated)
+3. **Drizzle ORM setup** with type-safe queries
+4. **Connection pooling** via Neon serverless driver
+5. **Database migrations** that can evolve schema
+6. **Basic CRUD endpoints** for contexts and messages
+7. **Cursor-based pagination** for message retrieval
+8. **Token-budgeted retrieval** endpoint
+9. **Version tracking** for point-in-time retrieval
+10. **Soft delete** for contexts and messages
 
-**Nice to Have (If Time Allows):**
-1. VS Code workspace settings
-2. EditorConfig
-3. Comprehensive .gitignore
+### Nice to Have (If Time Allows)
 
-**Defer to Later Milestones:**
-- Database configuration (v0.2.0 Storage)
-- API routes beyond health check (v0.3.0 Core Engine)
-- Deployment pipeline (when ready for production)
-- Documentation beyond README (as features ship)
+1. **Context forking** (basic implementation)
+2. **Batch message append** endpoint
+3. **Context metadata** (name, description)
+
+### Defer to Later Milestones
+
+| Feature | Target Milestone | Reason |
+|---------|------------------|--------|
+| Embedding computation | v0.3.0 | Requires model integration |
+| Semantic search | v0.3.0+ | Depends on embeddings |
+| Summarization | v0.3.0 | Policy engine concern |
+| Multi-tenancy | Commercial MVP | Requires auth system |
+| Caching layer | Performance milestone | Premature optimization |
+| Retention policies | Operations milestone | Policy decision |
+| Cross-session memory | Advanced features | Complex consolidation logic |
+
+---
+
+## Complexity Assessment
+
+| Feature | Complexity | Effort (days) | Risk |
+|---------|------------|---------------|------|
+| Schema design | Low | 0.5 | Low |
+| Drizzle ORM setup | Low | 0.5 | Low |
+| Neon connection | Low | 0.25 | Low - well documented |
+| Migrations | Low | 0.25 | Low |
+| Context CRUD | Low | 0.5 | Low |
+| Message append | Low | 0.25 | Low |
+| Cursor pagination | Medium | 0.5 | Low |
+| Token-budgeted retrieval | Medium | 0.5 | Medium - SQL complexity |
+| Point-in-time retrieval | Medium | 0.5 | Low |
+| Soft delete | Low | 0.25 | Low |
+| **Total** | | **~4 days** | |
+
+---
 
 ## Sources
 
-### High Confidence (Official/Context7)
-- [Vercel Functions Documentation](https://vercel.com/docs/functions)
-- [Vercel Project Configuration](https://vercel.com/docs/project-configuration)
-- [TypeScript TSConfig Reference](https://www.typescriptlang.org/tsconfig/)
-- [Vitest Configuration Guide](https://vitest.dev/config/)
+### HIGH Confidence (Official/Verified)
 
-### Medium Confidence (Verified WebSearch)
-- [ESLint + Prettier Configuration (2026)](https://medium.com/@osmion/prettier-eslint-configuration-that-actually-works-without-the-headaches-a8506b710d21)
-- [Husky + lint-staged Setup](https://github.com/lint-staged/lint-staged)
-- [TypeScript Best Practices for Large-Scale Apps](https://johal.in/typescript-best-practices-for-large-scale-web-applications-in-2026/)
-- [GitHub Actions + Vercel CI/CD](https://vercel.com/kb/guide/how-can-i-use-github-actions-with-vercel)
+- [LangGraph Memory Overview](https://docs.langchain.com/oss/python/langgraph/memory) - Memory patterns for AI agents
+- [Supabase pgvector Documentation](https://supabase.com/docs/guides/database/extensions/pgvector) - Vector storage patterns
+- [Event Sourcing - Martin Fowler](https://martinfowler.com/eaaDev/EventSourcing.html) - Event sourcing fundamentals
+- [AWS DynamoDB Chatbot Data Models](https://aws.amazon.com/blogs/database/amazon-dynamodb-data-models-for-generative-ai-chatbots/) - Conversation storage patterns
 
-### Low Confidence (Single Source)
-- Specific version recommendations may shift; verify against current LTS when implementing
+### MEDIUM Confidence (Multiple Sources Agree)
+
+- [Memory for AI Agents - The New Stack](https://thenewstack.io/memory-for-ai-agents-a-new-paradigm-of-context-engineering/) - Context engineering paradigm
+- [Google ADK Context Architecture](https://developers.googleblog.com/architecting-efficient-context-aware-multi-agent-framework-for-production/) - Tiered storage patterns
+- [Cursor-Based Pagination Performance](https://betterprogramming.pub/why-token-based-pagination-performs-better-than-offset-based-465e1139bb33) - Why cursors outperform offsets
+- [LLM Context Management Guide](https://eval.16x.engineer/blog/llm-context-management-guide) - Context window best practices
+
+### LOW Confidence (Single Source - Verify Before Implementing)
+
+- Specific token count storage strategies may vary by embedding model
+- pgvector index tuning (HNSW vs IVFFlat) requires benchmarking with real data
+- Optimal snapshot frequency for large conversations needs empirical testing

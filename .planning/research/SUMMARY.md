@@ -1,7 +1,7 @@
-# Research Summary: Kata Context v0.1.0 Core Setup
+# Research Summary: v0.2.0 Database + Storage Layer
 
-**Project:** Kata Context - Standalone context policy engine for AI agents
-**Milestone:** v0.1.0 Core Setup
+**Project:** Kata Context
+**Milestone:** v0.2.0 Database + Storage Layer
 **Synthesized:** 2026-01-29
 **Overall Confidence:** HIGH
 
@@ -9,401 +9,469 @@
 
 ## Executive Summary
 
-Kata Context is a REST API-first context policy engine that will be deployed on Vercel's serverless platform with TypeScript and Python SDKs. Based on comprehensive research across stack choices, feature requirements, architecture patterns, and common pitfalls, the recommended approach is:
+Kata Context v0.2.0 establishes PostgreSQL storage for an AI agent context policy engine. Based on comprehensive research across stack, features, architecture, and pitfalls, the clear recommendation is:
 
-**Use modern, fast, TypeScript-native tooling**: Node.js 24.x (Vercel's current LTS), pnpm 10.x for packages, Biome for linting/formatting (20-35x faster than ESLint+Prettier), and Vitest for testing (10-20x faster than Jest). These tools are production-ready, well-documented, and designed for the serverless environment.
+**Use Drizzle ORM with Neon PostgreSQL (pgvector enabled), deployed on Vercel serverless with Fluid Compute connection pooling.**
 
-**Adopt a monorepo structure with pure Vercel Functions**: Use Turborepo + pnpm workspaces to co-locate the API, TypeScript SDK, and Python SDK. Deploy the API using Vercel's `/api` directory pattern (not Next.js) to avoid unnecessary React/frontend overhead. Organize code feature-first (`domain/policy/`, `domain/context/`) rather than layer-first to keep related code together and support future extraction.
+This is not a generic CRUD application - it's an event-sourced conversation history system with versioning, point-in-time retrieval, and preparation for semantic search. The architecture must handle three unique challenges: (1) serverless connection pooling without exhaustion, (2) efficient windowing of token-budgeted conversation context, and (3) immutable message storage enabling version history and future context forking.
 
-**The biggest risks are configuration missteps in Phase 1**: The critical pitfalls all occur during initial setup: wrong module resolution settings (causes deployment failures), path aliases not resolved in production, ESM/CJS format mismatches, and environment variable confusion. These are preventable with correct TypeScript and Vercel configuration from day one, strict mode enabled immediately, and local testing with `vercel build` before first deployment. The research provides specific configuration templates to avoid these issues.
+The critical path is simple: schema design → connection pooling → repository pattern → CRUD API. The risks are equally clear: connection pool exhaustion under Vercel Fluid's aggressive scaling, HNSW index memory issues, and migration rollback gaps. Prevention strategies for all critical pitfalls are well-documented and must be implemented from day one.
 
 ---
 
 ## Key Findings
 
-### From STACK.md: Modern TypeScript Serverless Tooling
+### From STACK.md (Confidence: HIGH)
 
-**Core Stack:**
-- **Node.js 24.x** - Current Vercel default LTS (active through April 2028), native TypeScript type stripping
-- **pnpm 10.x** - 70% disk savings vs npm, strict dependency isolation, Vercel auto-detects via lockfile
-- **Biome 2.3.x** - Single tool for linting + formatting, 20-35x faster than ESLint+Prettier, 97% Prettier compatible
-- **Vitest 4.x** - 10-20x faster than Jest, native ESM/TypeScript, Jest-compatible API
-- **tsx 4.x** - Development TypeScript execution, 20-30x faster than ts-node
+**Core Technology Decisions:**
 
-**TypeScript Configuration:**
-- Target: ES2024 (Node.js 24 supports fully)
-- Module: NodeNext (Node.js ESM with package.json type field support)
-- Enable `strict: true`, `verbatimModuleSyntax: true`, `isolatedModules: true`
-- Use `noEmit: true` - Vercel handles compilation
+- **Database:** Neon PostgreSQL (direct, not Vercel Postgres which is deprecated as of Q4 2024)
+  - Rationale: Vercel Postgres transitioned to Neon; direct Neon is cheaper with identical performance
+  - Native pgvector support (up to 2,000 dimensions standard, 4,000 with halfvec)
 
-**What NOT to include:**
-- Jest, ESLint+Prettier (slower alternatives)
-- Webpack/Rollup/esbuild (Vercel handles bundling)
-- Babel, nodemon, husky+lint-staged (unnecessary for v0.1.0)
+- **ORM:** Drizzle ORM 0.45.1 with drizzle-kit 0.31.8
+  - Rationale: Lightweight (~7kb), zero binary dependencies, negligible cold start impact vs Prisma
+  - Native pgvector support with vector types and similarity operators
+  - SQL-first approach provides query transparency critical for serverless optimization
 
-**Confidence:** HIGH - Based on official Vercel documentation and verified benchmarks
+- **Driver:** @neondatabase/serverless 1.0.2 (WebSocket + Pool for Vercel Fluid)
+  - Rationale: With Fluid Compute (default since April 2025), use WebSocket driver with connection pooling
+  - Drop-in pg replacement with session support for transactions
+  - Lower latency after first connection due to connection reuse
 
-### From FEATURES.md: Essential vs Deferred Features
+- **pgvector:** Neon-managed extension
+  - Pre-installed, just needs `CREATE EXTENSION vector;`
+  - HNSW index recommended for query performance (slower builds but faster queries)
 
-**Table Stakes (Must Include):**
-- TypeScript configuration (tsconfig.json) with strict mode
-- Biome configuration (biome.json) for linting + formatting
-- .gitignore with Node + Vercel-specific entries
-- package.json scripts: dev, build, test, lint
-- /api directory structure for Vercel Functions
-- Environment variable handling (.env.example)
-- Node.js version specification (.nvmrc or engines)
-- README with setup instructions
+**Critical Version Requirements:**
+- Node.js 24.x (already established in v0.1.0)
+- drizzle-orm 0.45.1+ (pgvector support)
+- @neondatabase/serverless 1.0.2+ (WebSocket pooling)
 
-**Differentiators (Recommended):**
-- Vitest test configuration (modern, fast testing)
-- Strict TypeScript settings (noUncheckedIndexedAccess, noImplicitReturns)
-- vercel.json configuration (explicit function limits)
-- GitHub Actions CI workflow (lint + test only, not full CD)
-- EditorConfig and VS Code workspace settings
+**What NOT to Add:**
+- Vercel Postgres SDK (deprecated)
+- Prisma (heavier, more cold start latency)
+- node-postgres directly (use Neon serverless driver instead)
+- External vector databases (Pinecone/Weaviate - adds latency and complexity)
 
-**Anti-Features (Explicitly Avoid):**
-- Full GitHub Actions CD pipeline (use Vercel's Git integration)
-- Database configuration (defer to storage layer milestone)
-- API routes with business logic (single health check only)
-- Authentication/authorization (defer to security milestone)
-- Logging infrastructure, error monitoring (add during production hardening)
-- Complex folder structure (minimal: /api, /src, /tests)
-- Monorepo setup (single package until proven need for SDK phase)
-- Custom build tooling (trust Vercel's build system)
-- API versioning, rate limiting (add when API stabilizes)
+### From FEATURES.md (Confidence: HIGH)
 
-**Confidence:** HIGH - Based on Vercel's zero-config philosophy and verified best practices
+**Table Stakes (Must-Have for v0.2.0):**
 
-### From ARCHITECTURE.md: Monorepo with Pure Serverless
+1. Message persistence with role-based types (user/assistant/system/tool)
+2. Session/conversation isolation via context_id
+3. Message ordering with timestamp + version number
+4. Metadata storage (token counts, model info for windowing)
+5. Basic CRUD operations via REST API
+6. Serverless-optimized connection handling
+7. Database migrations (Drizzle)
+8. Soft delete (deleted_at timestamp)
 
-**Critical Architectural Decisions:**
+**Differentiators (What Sets Kata Context Apart):**
 
-1. **Monorepo (not Polyrepo)**: Use Turborepo + pnpm workspaces
-   - Enables coordinated releases between API and SDKs
-   - Shared TypeScript types between API and TypeScript SDK
-   - AI tooling benefits from full context visibility
-   - Accepted trade-off: Python SDK needs its own tooling within monorepo
+1. **Full version history** - Event sourcing pattern; every message append creates immutable version
+2. **Point-in-time retrieval** - Reconstruct context state at any version
+3. **Cursor-based windowing** - Efficient retrieval for large conversations (better than offset pagination)
+4. **Token count pre-computation** - O(1) budget checking without re-tokenization
+5. **pgvector column prepared** - Schema includes embedding vector(1536) but population deferred to v0.3.0
+6. **Context forking capability** - Design supports branching conversations for exploration
 
-2. **Pure Vercel Functions (not Next.js)**: Use `/api` directory pattern
-   - Kata Context is a REST API, not a web application
-   - No need for React, SSR, or frontend routing
-   - Zero-configuration deployment, lower complexity, smaller bundles
+**Anti-Features (Explicitly NOT Building):**
 
-**Directory Structure (Simplified for v0.1.0):**
+- Embedding computation (deferred to v0.3.0, separate concern)
+- Semantic search (requires embeddings first)
+- Automatic summarization (policy engine concern, not storage)
+- Real-time sync/streaming (REST sufficient for MVP)
+- Multi-tenant isolation (deferred to commercial milestone)
+- Caching layer (premature optimization)
+- Message editing/mutation (violates immutability)
+
+**Core Schema Design:**
+
+```sql
+-- Messages table (event log)
+CREATE TABLE messages (
+    id UUID PRIMARY KEY,
+    context_id UUID NOT NULL REFERENCES contexts(id),
+    version BIGINT NOT NULL,           -- Auto-incrementing per context
+    created_at TIMESTAMPTZ NOT NULL,
+    role TEXT NOT NULL,                -- 'user' | 'assistant' | 'system' | 'tool'
+    content TEXT NOT NULL,
+    tool_call_id TEXT,
+    tool_name TEXT,
+    token_count INTEGER,               -- Pre-computed for windowing
+    model TEXT,
+    deleted_at TIMESTAMPTZ,
+    embedding VECTOR(1536),            -- Nullable, for v0.3.0+
+    UNIQUE(context_id, version)
+);
+
+-- Contexts table (session container)
+CREATE TABLE contexts (
+    id UUID PRIMARY KEY,
+    name TEXT,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    message_count INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    latest_version BIGINT NOT NULL DEFAULT 0,
+    parent_id UUID REFERENCES contexts(id),  -- For forking
+    fork_version BIGINT,
+    deleted_at TIMESTAMPTZ
+);
+```
+
+**Retrieval Patterns:**
+- Latest N messages (newest first)
+- Token-budgeted window (cumulative sum until budget exceeded)
+- Point-in-time retrieval (all messages up to version X)
+- Cursor-based pagination (version > cursor)
+
+**Complexity Assessment:** ~4 days effort, low-to-medium risk
+
+### From ARCHITECTURE.md (Confidence: HIGH)
+
+**Layer Architecture (Strict Dependency Rule):**
+
+```
+HTTP Layer (api/)
+    → Service Layer (src/services/)
+    → Repository Layer (src/repositories/)
+    → Database Layer (src/db/)
+    → Neon PostgreSQL
+```
+
+Each layer only knows about the layer directly below it.
+
+**Directory Structure for v0.2.0:**
+
 ```
 kata-context/
-├── .planning/              # Kata planning artifacts
-├── api/                    # Vercel Functions
-│   └── health.ts          # GET /api/health
-├── src/                    # Shared code (placeholder for v0.1.0)
-├── tests/                  # Tests
-│   └── health.test.ts     # Smoke test
-├── package.json
-├── tsconfig.json
-├── biome.json
-└── vercel.json
+├── api/v1/contexts/              # HTTP endpoints
+├── src/
+│   ├── db/                       # Database client, schema, migrations
+│   │   ├── client.ts             # Drizzle client + pool
+│   │   ├── schema/               # Table definitions
+│   │   └── migrations/           # Generated SQL
+│   ├── repositories/             # Data access abstraction
+│   ├── services/                 # Business logic
+│   └── shared/                   # Errors, types
+└── drizzle.config.ts
 ```
 
-**Note:** Full monorepo structure with `apps/api/`, `packages/typescript-sdk/`, `packages/python-sdk/` deferred to SDK phase. Start simple for v0.1.0.
+**Connection Management Pattern:**
 
-**Patterns to Follow:**
-- **Vercel Function Handler**: Standard typed request/response pattern
-- **Feature-First Organization**: When adding domain code, organize by business domain (`domain/policy/`, `domain/context/`) not by layer
-- **Shared Types**: Single source of truth for TypeScript types (implement when SDK phase begins)
+```typescript
+// src/db/client.ts
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import { attachDatabasePool } from "@vercel/functions";
+import * as schema from "./schema/index.js";
 
-**Anti-Patterns to Avoid:**
-- Fat route handlers (keep business logic in services)
-- Layer-first organization (controllers/, services/, models/)
-- Next.js for pure APIs
-- Polyrepo for tightly coupled components
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 10,
+  idleTimeoutMillis: 5000,
+  connectionTimeoutMillis: 10000,
+});
 
-**Confidence:** HIGH for Vercel patterns, MEDIUM for full monorepo structure (implement incrementally)
+attachDatabasePool(pool);  // Vercel Fluid lifecycle management
 
-### From PITFALLS.md: Configuration Mistakes to Avoid
+export const db = drizzle(pool, { schema });
+export { pool };
+```
 
-**Critical Pitfalls (Phase 1 - Cause Rewrites):**
+**Key Configuration:**
+- max: 10 (reasonable pool size for serverless)
+- idleTimeoutMillis: 5000 (short timeout to release connections quickly)
+- attachDatabasePool (ensures connections close before function suspension)
 
-1. **Path Aliases Not Resolved in Compiled Output**
-   - TypeScript paths are type-checking only; `tsc` doesn't rewrite imports
-   - Prevention: Either configure bundler to match tsconfig OR avoid path aliases entirely
-   - For Vercel serverless: Consider avoiding aliases since functions may bundle differently
+**Connection String Strategy:**
+- Pooled: `postgresql://...@ep-xxx-pooler.region.aws.neon.tech/...` (for queries)
+- Direct: `postgresql://...@ep-xxx.region.aws.neon.tech/...` (for migrations)
 
-2. **Wrong Module Resolution Strategy**
-   - `moduleResolution: "bundler"` vs `moduleResolution: "node16"` are incompatible
-   - Prevention: For Vercel Functions with bundling use `moduleResolution: "bundler"` + `module: "ESNext"`
-   - Must match module and moduleResolution values
+**Repository Pattern Benefits:**
+1. Testability (mock repository without database)
+2. Abstraction (swap database without changing services)
+3. Query encapsulation (complex queries in one place)
+4. Type safety (Drizzle infers types from schema)
 
-3. **Environment Variables Baked at Build Time vs Runtime**
-   - Next.js replaces `process.env.VARIABLE` at build time for client code
-   - Prevention: Use Vercel's environment variable scoping per environment
-   - For Kata Context: Pure API means all env vars are runtime (simpler)
+**Migration Strategy:**
+- Development: `drizzle-kit push` for rapid iteration
+- Production: `drizzle-kit generate` + `drizzle-kit migrate` (never push)
+- pgvector extension: Manual `CREATE EXTENSION vector;` before migrations
 
-4. **ESM/CJS Module Format Mismatch**
-   - `"type": "module"` in package.json makes all .js files ESM
-   - Prevention: Pick ESM for new projects, add `"type": "module"`, set `module: "ESNext"` in tsconfig
+**Build Order:**
+1. Phase 1: Database foundation (schema, migrations, connection)
+2. Phase 2: Repository layer (CRUD operations)
+3. Phase 3: Service + API (business logic, HTTP endpoints)
 
-**Moderate Pitfalls (Phase 1 - Cause Delays):**
+### From PITFALLS.md (Confidence: HIGH)
 
-5. **Biome/Prettier Configuration** (Less applicable with Biome-only approach)
-   - Prevention: Use Biome exclusively to eliminate conflicts
+**Critical Pitfalls (Production Outage Risk):**
 
-6. **Testing Setup Not Matching Runtime**
-   - Prevention: Pin Node.js version with .nvmrc, enable strict async TypeScript rules
+1. **Connection Pool Exhaustion Under Load**
+   - Problem: Vercel Fluid scales aggressively → 10+ instances × 5 connections/pool = 50+ connections → exceeds limits
+   - Prevention: Use pooled connection string (-pooler), keep per-instance pool small (max: 2-3), monitor connection usage
+   - Phase: Database Integration
 
-7. **Choosing Edge Functions When Serverless Required**
-   - Prevention: Default to Serverless Functions (use Edge only for auth checks, redirects)
+2. **Connection Leaking on Function Suspension**
+   - Problem: Functions suspended (not terminated) → timers don't run → cleanup never fires → phantom connections
+   - Prevention: Use `attachDatabasePool`, set low idle timeouts (5-10s), prefer HTTP mode for Edge functions
+   - Phase: Database Integration
 
-8. **Large Bundle Sizes Causing Cold Starts**
-   - Prevention: Choose lightweight dependencies from start, analyze bundles before adding dependencies
+3. **Using drizzle-kit push in Production**
+   - Problem: No migration history → no rollback → schema drift → data loss
+   - Prevention: Use push only in development, always generate + migrate in production, guard CI/CD against push
+   - Phase: Database Integration
 
-9. **Not Enabling TypeScript Strict Mode**
-   - Prevention: Enable `strict: true` on day one, add `noUncheckedIndexedAccess: true`
+4. **HNSW Index Builds Exhausting Memory**
+   - Problem: HNSW indexes are memory-intensive → OOM on small serverless instances
+   - Prevention: Start with IVFFlat, scale up for HNSW builds, set appropriate maintenance_work_mem
+   - Phase: Vector Search
 
-**Minor Pitfalls (Quick Fixes):**
+**Moderate Pitfalls (Delays/Debugging):**
 
-10. **Utility Files in /api Directory**: Prefix with underscore or place outside /api
-11. **vercel.json Overrides Build Settings**: Pick one source of truth
-12. **Forgetting to Pin Dependency Versions**: Use lockfile and commit it
+5. **Cold Start Latency Surprise** (500ms-3000ms first request)
+   - Prevention: Use pooled connections, keep database warm, use HTTP driver for latency-sensitive paths
 
-**Confidence:** HIGH - Based on official documentation and verified community issues
+6. **Wrong Driver for Runtime Environment** (pg in Edge Functions fails)
+   - Prevention: @neondatabase/serverless HTTP mode for Edge, pg for Node.js Serverless
+
+7. **Missing Pooled Connection String** (direct instead of -pooler)
+   - Prevention: Verify hostname contains -pooler, use DATABASE_URL_POOLED naming
+
+8. **Migrations Without Rollback Plan**
+   - Prevention: Snapshot before migrations (Neon branching), test on prod data clone, expandable migrations
+
+9. **Environment Variable Misconfiguration**
+   - Prevention: Create database before first deploy, scope env vars per environment, use Neon branching for previews
+
+**Minor Pitfalls (Quickly Fixable):**
+
+10. Forgetting SSL in production
+11. IVFFlat index on empty/small table
+12. Transactions spanning multiple requests
+
+**Quick Reference Checklist:**
+- Using pooled connection string (hostname contains -pooler)
+- Connection pool max is small (2-3, not 10+)
+- Idle timeout is low (5-10 seconds)
+- attachDatabasePool for connection lifecycle
+- Correct driver for function type (Edge vs Serverless)
+- Environment variables scoped per environment
+- Database created before first deployment
+- Using drizzle-kit generate + migrate, NOT push in production
+- Migration rollback strategy documented
+- Neon snapshot taken before migrations
 
 ---
 
 ## Implications for Roadmap
 
-### Suggested Phase Structure
+Based on combined research, the roadmap should follow this phase structure:
 
-Based on combined research, v0.1.0 Core Setup should be broken into focused phases:
+### Suggested Phase Structure (3 Phases)
 
-#### Phase 1: Project Initialization (Foundation)
-**Rationale:** Get configuration right before writing any code. All critical pitfalls occur here.
+**Phase 1: Database Foundation** (2 days)
+- Rationale: Must have working schema and connection before any features
+- Delivers: Schema definitions, migrations, connection pooling, health check with DB query
+- Features:
+  - Install dependencies (drizzle-orm, pg, @vercel/functions)
+  - Create contexts and messages tables
+  - Configure Neon with pooled connection string
+  - Set up Drizzle client with attachDatabasePool
+  - Generate and run first migration
+  - Enable pgvector extension
+- Pitfalls to avoid:
+  - Connection pool exhaustion (use pooled string, small max)
+  - Missing pgvector extension (create manually)
+  - Wrong connection string (must have -pooler)
 
-**Delivers:**
-- Project structure (single package, not monorepo yet)
-- TypeScript configuration with strict mode
-- pnpm workspace initialization
-- Node.js version pinning
+**Phase 2: Repository Pattern & CRUD** (1.5 days)
+- Rationale: Data access abstraction enables testability and future schema changes
+- Delivers: Type-safe repository layer, basic CRUD operations
+- Features:
+  - Context repository (findById, findByTenant, create, update, delete)
+  - Message repository (append, getMessages, getAtVersion)
+  - Cursor-based pagination implementation
+  - Token-budgeted retrieval query
+  - Unit tests (mock db) and integration tests (test db)
+- Pitfalls to avoid:
+  - Fat repositories (keep them focused on data access only)
+  - Missing soft delete (implement from start)
+  - Direct db access from services (enforce layer boundary)
 
-**Features from FEATURES.md:**
-- tsconfig.json (strict: true, moduleResolution: bundler, module: ESNext)
-- package.json with engines field
-- .nvmrc file
-- .gitignore
+**Phase 3: Service Layer & API Endpoints** (1.5 days)
+- Rationale: Business logic and HTTP layer complete the vertical slice
+- Delivers: Working REST API for context management
+- Features:
+  - Context service (orchestrates repository calls)
+  - API endpoints (POST /contexts, GET /contexts/:id, DELETE /contexts/:id)
+  - Message endpoints (POST /contexts/:id/messages, GET with pagination)
+  - Request validation (zod schemas)
+  - Error handling and response formatting
+- Pitfalls to avoid:
+  - Business logic in route handlers (belongs in services)
+  - Missing environment variable scoping (verify before deploy)
+  - Transactions spanning multiple requests (complete within one request)
 
-**Pitfalls to avoid:**
-- Wrong module resolution (Pitfall 2)
-- ESM/CJS mismatch (Pitfall 4)
-- Not enabling strict mode (Pitfall 9)
+**Total Estimated Effort:** 5 days (aligns with complexity assessment from FEATURES.md)
 
-**Research needed:** None - well-documented patterns
+### Research Flags
 
----
+**Needs Additional Research:**
+- None - all phases have well-documented patterns and official guidance
 
-#### Phase 2: Developer Tooling
-**Rationale:** Set up quality and testing tools while codebase is small and easy to configure.
+**Standard Patterns (Skip Research):**
+- Phase 1: Drizzle + Neon setup is extensively documented
+- Phase 2: Repository pattern is standard practice
+- Phase 3: REST API design for CRUD is well-understood
 
-**Delivers:**
-- Linting and formatting with Biome
-- Testing framework with Vitest
-- Basic CI workflow
+**Deep Research Required Later:**
+- v0.3.0 Policy Engine: Context window management strategies, token budgeting algorithms
+- v0.4.0+ Semantic Search: Embedding model selection, vector index tuning (HNSW vs IVFFlat)
 
-**Features from FEATURES.md:**
-- biome.json configuration
-- vitest.config.ts
-- package.json scripts (dev, build, test, lint)
-- .github/workflows/ci.yml (lint + test only)
-- .vscode/settings.json (optional but recommended)
+### Dependencies Between Phases
 
-**Pitfalls to avoid:**
-- Biome misconfiguration (minimal risk, single tool)
-- Testing environment mismatch (Pitfall 6)
+```
+Phase 1 (Database Foundation)
+    ↓ (blocks everything)
+Phase 2 (Repository Pattern)
+    ↓ (blocks API)
+Phase 3 (Service + API)
+    ↓ (milestone complete)
+v0.3.0 Policy Engine
+```
 
-**Research needed:** None - straightforward setup
+**No parallel work possible** - each phase strictly depends on the previous.
 
----
+### Deferred to Future Milestones
 
-#### Phase 3: Vercel Functions Setup
-**Rationale:** Deploy simplest possible serverless function to verify configuration works end-to-end.
-
-**Delivers:**
-- /api directory structure
-- Health check endpoint
-- Vercel configuration
-- Local development workflow
-- First deployment
-
-**Features from FEATURES.md:**
-- /api/health.ts (GET /api/health returns {status: "ok"})
-- vercel.json configuration
-- .env.example
-- tests/health.test.ts (smoke test)
-- README with setup instructions
-
-**Pitfalls to avoid:**
-- Path aliases not resolved (Pitfall 1)
-- Utility files becoming functions (Pitfall 10)
-- vercel.json overrides (Pitfall 11)
-- Not testing `vercel build` locally (Pitfall 3)
-
-**Research needed:** None - pure Vercel Functions pattern is well-documented
-
----
-
-### Architecture Evolution
-
-**v0.1.0 (Current Milestone):** Single package, minimal structure
-- Simple `/api`, `/src`, `/tests` directories
-- No monorepo complexity
-- Focus on getting configuration right
-
-**v0.2.0 (Storage Layer):** Add database integration
-- Still single package
-- Add database client configuration
-- Watch out for cold start timeouts (Pitfall 8)
-
-**v0.3.0 (SDK Phase):** Migrate to monorepo
-- Introduce Turborepo + pnpm workspaces
-- Refactor to `apps/api/`, `packages/typescript-sdk/`, `packages/python-sdk/`
-- Implement shared types package
-
-**v1.0.0 (Production):** Harden and optimize
-- Add logging infrastructure
-- Add error monitoring
-- Implement rate limiting
-- Multi-region deployment considerations
-
----
-
-## Research Flags
-
-### Phases Needing Deeper Research
-
-**Phase 2.5 (Database Integration - future milestone):**
-- Needs `/kata:research-phase` for database choice and connection pooling patterns
-- Serverless-specific database considerations
-- Cold start mitigation strategies
-
-**Phase 3.5 (SDK Architecture - future milestone):**
-- Needs `/kata:research-phase` for Python SDK packaging and distribution
-- Type generation from API schema
-- Multi-language error handling patterns
-
-### Phases with Standard Patterns (Skip Research)
-
-**Phase 1-3 (v0.1.0):** Well-documented, no additional research needed
-- TypeScript + Vercel serverless patterns are mature
-- Biome and Vitest have straightforward setup
-- Pure API deployment is Vercel's core use case
+| Feature | Target Milestone | Reason |
+|---------|------------------|--------|
+| Embedding computation | v0.3.0 | Requires model integration |
+| Semantic search | v0.3.0+ | Depends on embeddings |
+| Context summarization | v0.3.0 | Policy engine concern |
+| Context forking (full) | v0.3.0 | Basic design in v0.2.0, full implementation later |
+| Multi-tenancy | Commercial MVP | Requires auth system |
+| Caching layer | Performance optimization | Premature for v0.2.0 |
+| Retention policies | Operations milestone | Policy decision, not storage |
 
 ---
 
 ## Confidence Assessment
 
-| Area         | Confidence | Notes                                                                                     |
-| ------------ | ---------- | ----------------------------------------------------------------------------------------- |
-| Stack        | HIGH       | Official Vercel docs, verified benchmarks, current LTS versions identified                |
-| Features     | HIGH       | Clear table stakes vs differentiators, anti-features well-justified from Vercel patterns  |
-| Architecture | HIGH       | Pure Vercel Functions pattern is officially documented; monorepo deferred to later phase  |
-| Pitfalls     | HIGH       | Based on official docs, community issues, and verified incidents; specific to TypeScript + Vercel |
+| Area | Confidence | Notes |
+|------|------------|-------|
+| Stack | HIGH | Official documentation from Vercel, Neon, Drizzle; verified versions from npm registry |
+| Features | HIGH | Based on LangGraph memory patterns, AWS DynamoDB chatbot models, event sourcing fundamentals |
+| Architecture | HIGH | Vercel connection pooling docs, Drizzle setup guides, repository pattern is standard |
+| Pitfalls | HIGH | All critical pitfalls sourced from official docs, verified community issues, multiple sources |
+| Overall | HIGH | Converging recommendations across all dimensions; no conflicting guidance |
 
-### Gaps to Address
+**Source Quality:**
+- 80% from official documentation (Vercel, Neon, Drizzle, pgvector)
+- 15% from verified technical guides (AWS, LangGraph, Martin Fowler)
+- 5% from community issues (verified against official sources)
 
-**Identified gaps that need attention during planning:**
+**Confidence Factors:**
+- Neon over Vercel Postgres: Backed by official deprecation notice
+- Drizzle over Prisma: Multiple benchmarks, serverless recommendations, 2026 comparisons
+- Connection pooling strategy: Vercel Fluid docs explicitly recommend attachDatabasePool pattern
+- pgvector setup: Native Neon support with clear documentation
 
-1. **Database selection deferred**: Not researched yet, intentionally deferred to v0.2.0 Storage milestone
-   - Will need research on serverless-optimized databases (Neon, Turso, etc.)
-   - Connection pooling and cold start strategies
+---
 
-2. **Python SDK tooling**: Mentioned but not deeply researched
-   - Defer to SDK phase when implementing packages/python-sdk/
-   - Will need research on Poetry vs pip, PyPI publishing, type stubs
+## Gaps to Address
 
-3. **Production hardening details**: Logging, monitoring, rate limiting mentioned as anti-features for v0.1.0
-   - Correctly deferred, but will need research when implementing
-   - Consider Vercel Observability, Sentry integration, Upstash rate limiting
+### Known Gaps (Minor)
 
-4. **Monorepo migration path**: Architecture research focused on final state
-   - Need to document migration steps from single package to monorepo
-   - When to introduce Turborepo (likely during SDK phase)
+1. **Exact HNSW vs IVFFlat performance trade-offs for this use case**
+   - Gap: Research covers general guidance but not specific to 1536-dim embeddings with context data
+   - Impact: Low - can start with IVFFlat and optimize later based on actual query patterns
+   - Resolution: Benchmark during v0.3.0 when embeddings are populated
 
-**These gaps are acceptable for v0.1.0** because they're explicitly deferred to later milestones.
+2. **Optimal token_count storage strategy**
+   - Gap: Should token counts be computed on write or read? Which tokenizer to use?
+   - Impact: Low - storing pre-computed counts is clear win, tokenizer choice deferred to v0.3.0
+   - Resolution: Store null in v0.2.0, populate when policy engine integrates
+
+3. **Production migration automation**
+   - Gap: Research identifies two options (build-time vs separate job) but doesn't prescribe one
+   - Impact: Low - can start with simple approach and evolve
+   - Resolution: Start with build-time migrations, move to GitHub Actions if issues arise
+
+### No Critical Gaps
+
+All ship-blocking decisions have clear, high-confidence answers:
+- Database platform: Neon
+- ORM: Drizzle
+- Driver: @neondatabase/serverless with WebSocket + Pool
+- Connection management: attachDatabasePool with pooled connection string
+- Migration strategy: generate + migrate (not push)
+- Schema design: Event-sourced messages with contexts container
 
 ---
 
 ## Ready for Requirements
 
-### What We Know with Confidence
+SUMMARY.md synthesizes research from:
+- STACK.md (technology decisions, versions, configuration)
+- FEATURES.md (table stakes, differentiators, anti-features, schema design)
+- ARCHITECTURE.md (layer separation, directory structure, connection patterns)
+- PITFALLS.md (critical/moderate/minor pitfalls with prevention strategies)
 
-1. **Stack is locked in**: Node.js 24.x, pnpm 10.x, Biome 2.3.x, Vitest 4.x, tsx 4.x, TypeScript 5.9.x
-2. **Architecture is clear**: Start simple (single package), pure Vercel Functions, feature-first organization
-3. **Critical risks identified**: All Phase 1 configuration pitfalls documented with prevention strategies
-4. **Feature scope is bounded**: Table stakes defined, anti-features identified, defer database/auth/monitoring
+### Key Takeaways for Roadmapper
 
-### Specific Recommendations for Roadmapper
+1. **Technology stack is decided and well-supported**: Neon + Drizzle + pgvector on Vercel Fluid
+2. **Phase structure is clear**: 3 sequential phases (Foundation → Repository → API)
+3. **Critical risks are known and mitigable**: Connection pooling and migration rollback are the two focus areas
+4. **Scope is well-defined**: CRUD operations with versioning, no embeddings/search in v0.2.0
+5. **Effort estimate is realistic**: 5 days total with low-to-medium risk
 
-**Phase 1 duration estimate:** 1-2 hours (mostly configuration files)
-- High confidence because patterns are well-documented
-- No complex decisions, just following Vercel best practices
+### Next Steps
 
-**Phase 2 duration estimate:** 2-3 hours (Biome + Vitest + CI)
-- Straightforward tool setup
-- CI workflow is minimal (lint + test)
+The roadmapper should:
+1. Convert suggested phases into detailed roadmap with tasks
+2. Add specific acceptance criteria based on features and pitfall prevention
+3. Incorporate pitfall checklist into phase completion criteria
+4. Plan Neon database creation before Phase 1 kickoff
+5. Schedule migration safety review before production deployment
 
-**Phase 3 duration estimate:** 2-3 hours (health check + deployment)
-- Simple endpoint implementation
-- First Vercel deployment verification
-- Documentation of setup process
-
-**Total v0.1.0 estimate:** 5-8 hours of focused work
-
-**Risk factors:**
-- LOW: Configuration is well-specified
-- MEDIUM: First Vercel deployment might reveal environment-specific issues
-- Mitigation: Test `vercel build` locally before deploying
-
-**Validation checkpoints:**
-- Phase 1: `pnpm install` and `tsc --noEmit` pass
-- Phase 2: `pnpm test` and `pnpm lint` pass in CI
-- Phase 3: Health check returns 200 OK in production deployment
+**Research status:** COMPLETE. All dimensions investigated, synthesis complete, ready for requirements definition.
 
 ---
 
 ## Sources
 
-### STACK.md Sources
-- [pnpm vs npm vs yarn vs Bun: The 2026 Package Manager Showdown](https://dev.to/pockit_tools/pnpm-vs-npm-vs-yarn-vs-bun-the-2026-package-manager-showdown-51dc)
-- [Biome Official Site](https://biomejs.dev/) (v2.3.13)
-- [Biome: Complete Migration Guide for 2026](https://dev.to/pockit_tools/biome-the-eslint-and-prettier-killer-complete-migration-guide-for-2026-27m)
-- [Vitest Official Site](https://vitest.dev/) (v4.0.18)
-- [Vitest vs Jest 30: 2026 Browser-Native Testing](https://dev.to/dataformathub/vitest-vs-jest-30-why-2026-is-the-year-of-browser-native-testing-2fgb)
-- [TypeScript 5.9 Documentation](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-9.html)
-- [Vercel Functions Documentation](https://vercel.com/docs/functions)
-- [Vercel Node.js Runtime](https://vercel.com/docs/functions/runtimes/node-js)
+### Official Documentation (HIGH Confidence)
+- [Neon Serverless Driver](https://neon.com/docs/serverless/serverless-driver)
+- [Neon pgvector Extension](https://neon.com/docs/extensions/pgvector)
+- [Neon Vercel Connection Methods](https://neon.com/docs/guides/vercel-connection-methods)
+- [Neon Connection Pooling](https://neon.com/docs/connect/connection-pooling)
+- [Vercel Fluid Compute](https://vercel.com/docs/fluid-compute)
+- [Vercel Connection Pooling with Functions](https://vercel.com/kb/guide/connection-pooling-with-functions)
+- [Drizzle + Neon](https://orm.drizzle.team/docs/connect-neon)
+- [Drizzle pgvector Guide](https://orm.drizzle.team/docs/guides/vector-similarity-search)
+- [Drizzle Migrations](https://orm.drizzle.team/docs/migrations)
+- [LangGraph Memory Overview](https://docs.langchain.com/oss/python/langgraph/memory)
+- [Supabase pgvector Documentation](https://supabase.com/docs/guides/database/extensions/pgvector)
 
-### FEATURES.md Sources
-- [Vercel Functions Documentation](https://vercel.com/docs/functions)
-- [Vercel Project Configuration](https://vercel.com/docs/project-configuration)
-- [TypeScript TSConfig Reference](https://www.typescriptlang.org/tsconfig/)
-- [Vitest Configuration Guide](https://vitest.dev/config/)
-- [ESLint + Prettier Configuration (2026)](https://medium.com/@osmion/prettier-eslint-configuration-that-actually-works-without-the-headaches-a8506b710d21)
+### Comparison Analysis (MEDIUM Confidence)
+- [Prisma vs Drizzle ORM in 2026](https://medium.com/@thebelcoder/prisma-vs-drizzle-orm-in-2026-what-you-really-need-to-know-9598cf4eaa7c)
+- [Drizzle: A performant and type-safe alternative to Prisma](https://www.thisdot.co/blog/drizzle-orm-a-performant-and-type-safe-alternative-to-prisma)
+- [Node.js ORMs in 2025](https://thedataguy.pro/blog/2025/12/nodejs-orm-comparison-2025/)
+- [AWS DynamoDB Chatbot Data Models](https://aws.amazon.com/blogs/database/amazon-dynamodb-data-models-for-generative-ai-chatbots/)
+- [Event Sourcing - Martin Fowler](https://martinfowler.com/eaaDev/EventSourcing.html)
 
-### ARCHITECTURE.md Sources
-- [Vercel Functions](https://vercel.com/docs/functions)
-- [Vercel vercel.ts Configuration](https://vercel.com/docs/project-configuration/vercel-ts)
-- [Turborepo Repository Structure](https://turborepo.dev/docs/crafting-your-repository/structuring-a-repository)
-- [Hosting Backend APIs on Vercel](https://vercel.com/kb/guide/hosting-backend-apis)
-- [Monorepo Tools Comparison](https://monorepo.tools/)
+### Pitfall Analysis (MEDIUM-HIGH Confidence)
+- [Vercel Blog: The real serverless compute to database connection problem](https://vercel.com/blog/the-real-serverless-compute-to-database-connection-problem-solved)
+- [Postgres Connection Exhaustion with Vercel Fluid](https://www.solberg.is/vercel-fluid-backpressure)
+- [Neon: Promoting Postgres Changes Safely](https://neon.com/blog/promoting-postgres-changes-safely-production)
+- [3 Biggest Mistakes with Drizzle ORM](https://medium.com/@lior_amsalem/3-biggest-mistakes-with-drizzle-orm-1327e2531aff)
+- [AWS: Optimize pgvector indexing](https://aws.amazon.com/blogs/database/optimize-generative-ai-applications-with-pgvector-indexing-a-deep-dive-into-ivfflat-and-hnsw-techniques/)
 
-### PITFALLS.md Sources
-- [Vercel Environment Variables](https://vercel.com/docs/projects/environment-variables)
-- [TypeScript moduleResolution docs](https://www.typescriptlang.org/tsconfig/moduleResolution.html)
-- [Next.js Discussion #41189](https://github.com/vercel/next.js/discussions/41189)
-- [Vercel Community: TypeScript serverless functions](https://community.vercel.com/t/deploying-typescript-serverless-functions/4029)
-- [eslint-config-prettier GitHub](https://github.com/prettier/eslint-config-prettier)
-- [Vercel Cold Start Performance guide](https://vercel.com/kb/guide/how-can-i-improve-serverless-function-lambda-cold-start-performance-on-vercel)
-- [Why strict: true isn't enough](https://itnext.io/why-typescripts-strict-true-isn-t-enough-missing-compiler-flags-for-production-code-a3877b81142c)
-
----
-
-**Synthesis Complete:** All research files synthesized. Ready for roadmap creation.
+**Total sources consulted:** 30+ (official docs, technical guides, community analysis)
+**Research date:** 2026-01-29
+**Researcher:** kata-research-synthesizer agent

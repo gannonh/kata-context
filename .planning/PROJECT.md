@@ -16,7 +16,15 @@ Given messages and a context budget, determine the optimal window to send to the
 - GitHub Actions CI pipeline
 - Vercel serverless health endpoint
 
-**Next Milestone:** v0.2.0 (not yet planned)
+## Current Milestone: v0.2.0 Database + Storage Layer
+
+**Goal:** Establish the storage foundation for context persistence — PostgreSQL schema, connection handling, and basic CRUD operations.
+
+**Target features:**
+- PostgreSQL schema for context storage (Vercel Postgres / Neon with pgvector)
+- Serverless-optimized connection handling (pooling, cold start mitigation)
+- Basic context CRUD operations
+- Database migration setup
 
 ## Requirements
 
@@ -111,4 +119,4 @@ The context layer you'd build yourself, but shouldn't have to. Infrastructure, n
 | Web Standard APIs for Vercel | No SDK dependency; portable code; modern standard | Good |
 
 ---
-*Last updated: 2026-01-29 after v0.1.0 milestone*
+*Last updated: 2026-01-29 — v0.2.0 Database + Storage Layer milestone started*
