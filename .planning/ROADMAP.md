@@ -20,8 +20,8 @@ v0.2.0 establishes the storage foundation for context persistence. Three phases 
 **Plans:** 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md - Install Drizzle ORM, configure connection pooling, define schema
-- [ ] 03-02-PLAN.md - Generate migration, verify database, update health endpoint
+- [x] 03-01-PLAN.md - Install Drizzle ORM, configure connection pooling, define schema
+- [x] 03-02-PLAN.md - Generate migration, verify database, update health endpoint
 
 **Requirements:**
 - DB-01: PostgreSQL database provisioned on Neon with pgvector extension enabled
@@ -95,7 +95,7 @@ Plans:
 
 | Phase | Name | Status | Plans | Requirements |
 |-------|------|--------|-------|--------------|
-| 3 | Database Foundation | Planned | 0/2 | 8 |
+| 3 | Database Foundation | Complete | 2/2 | 8 |
 | 4 | Repository Layer | Pending | 0/? | 6 |
 | 5 | API + Testing Layer | Pending | 0/? | 9 |
 
@@ -107,14 +107,14 @@ Plans:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DB-01 | 3 | Pending |
-| DB-02 | 3 | Pending |
-| DB-03 | 3 | Pending |
-| DB-04 | 3 | Pending |
-| SCHEMA-01 | 3 | Pending |
-| SCHEMA-02 | 3 | Pending |
-| SCHEMA-03 | 3 | Pending |
-| SCHEMA-04 | 3 | Pending |
+| DB-01 | 3 | Complete |
+| DB-02 | 3 | Complete |
+| DB-03 | 3 | Complete |
+| DB-04 | 3 | Complete |
+| SCHEMA-01 | 3 | Complete |
+| SCHEMA-02 | 3 | Complete |
+| SCHEMA-03 | 3 | Complete |
+| SCHEMA-04 | 3 | Complete |
 | DATA-01 | 4 | Pending |
 | DATA-02 | 4 | Pending |
 | DATA-03 | 4 | Pending |
