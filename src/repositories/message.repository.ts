@@ -1,0 +1,163 @@
+import { and, asc, desc, eq, gt, lt, sql } from "drizzle-orm";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { PgliteDatabase } from "drizzle-orm/pglite";
+import type * as schema from "../db/schema/index.js";
+import { contexts, type Message, messages } from "../db/schema/index.js";
+import { handleDatabaseError, notDeleted } from "./helpers.js";
+import type {
+  AppendMessageInput,
+  PaginatedResult,
+  PaginationOptions,
+  TokenBudgetOptions,
+} from "./types.js";
+import { RepositoryError } from "./types.js";
+
+type Database = NodePgDatabase<typeof schema> | PgliteDatabase<typeof schema>;
+
+export class MessageRepository {
+  constructor(private db: Database) {}
+
+  // DATA-03: Append messages to context (batch insert with sequence assignment)
+  // Uses transaction with FOR UPDATE to prevent race conditions
+  async append(contextId: string, newMessages: AppendMessageInput[]): Promise<Message[]> {
+    if (newMessages.length === 0) {
+      return [];
+    }
+
+    try {
+      return await this.db.transaction(async (tx) => {
+        // Lock context row and get current latest version
+        const [context] = await tx
+          .select({
+            id: contexts.id,
+            latestVersion: contexts.latestVersion,
+          })
+          .from(contexts)
+          .where(and(eq(contexts.id, contextId), notDeleted(contexts)))
+          .for("update");
+
+        if (!context) {
+          throw new RepositoryError(`Context not found: ${contextId}`, "NOT_FOUND");
+        }
+
+        // Assign sequential versions starting after current latest
+        let nextVersion = context.latestVersion;
+        const messagesWithVersions = newMessages.map((msg) => ({
+          contextId,
+          version: ++nextVersion,
+          role: msg.role,
+          content: msg.content,
+          tokenCount: msg.tokenCount ?? null,
+          toolCallId: msg.toolCallId ?? null,
+          toolName: msg.toolName ?? null,
+          model: msg.model ?? null,
+        }));
+
+        // Batch insert all messages
+        const inserted = await tx.insert(messages).values(messagesWithVersions).returning();
+
+        // Calculate total new tokens (null-safe)
+        const totalNewTokens = inserted.reduce((sum, m) => sum + (m.tokenCount ?? 0), 0);
+
+        // Atomically update context counters
+        await tx
+          .update(contexts)
+          .set({
+            messageCount: sql`${contexts.messageCount} + ${inserted.length}`,
+            totalTokens: sql`${contexts.totalTokens} + ${totalNewTokens}`,
+            latestVersion: nextVersion,
+            updatedAt: new Date(),
+          })
+          .where(eq(contexts.id, contextId));
+
+        return inserted;
+      });
+    } catch (error) {
+      if (error instanceof RepositoryError) throw error;
+      handleDatabaseError(error);
+    }
+  }
+
+  // DATA-04: Retrieve messages with cursor-based pagination
+  async findByContext(
+    contextId: string,
+    options: PaginationOptions = {},
+  ): Promise<PaginatedResult<Message>> {
+    const { cursor, limit = 50, order = "asc" } = options;
+
+    // Fetch one extra to determine if there are more
+    const fetchLimit = limit + 1;
+
+    // Build where conditions
+    const conditions = [eq(messages.contextId, contextId), notDeleted(messages)];
+
+    // Add cursor condition if provided
+    if (cursor !== undefined) {
+      conditions.push(
+        order === "asc" ? gt(messages.version, cursor) : lt(messages.version, cursor),
+      );
+    }
+
+    const results = await this.db
+      .select()
+      .from(messages)
+      .where(and(...conditions))
+      .orderBy(order === "asc" ? asc(messages.version) : desc(messages.version))
+      .limit(fetchLimit);
+
+    const hasMore = results.length > limit;
+    const data = hasMore ? results.slice(0, limit) : results;
+    const lastItem = data[data.length - 1];
+    const nextCursor = hasMore && lastItem ? lastItem.version : null;
+
+    return { data, nextCursor, hasMore };
+  }
+
+  // DATA-06: Token-budgeted windowing (retrieve last N tokens worth of messages)
+  // Returns messages in chronological order (oldest first)
+  async getByTokenBudget(contextId: string, options: TokenBudgetOptions): Promise<Message[]> {
+    const { budget } = options;
+
+    if (budget <= 0) {
+      return [];
+    }
+
+    // Fetch messages newest-first to find the window
+    const allMessages = await this.db
+      .select()
+      .from(messages)
+      .where(and(eq(messages.contextId, contextId), notDeleted(messages)))
+      .orderBy(desc(messages.version));
+
+    // Accumulate until budget exceeded
+    const result: Message[] = [];
+    let tokensUsed = 0;
+
+    for (const msg of allMessages) {
+      const msgTokens = msg.tokenCount ?? 0;
+
+      // Always include at least one message, then check budget
+      if (tokensUsed + msgTokens > budget && result.length > 0) {
+        break;
+      }
+
+      result.push(msg);
+      tokensUsed += msgTokens;
+    }
+
+    // Return in chronological order (oldest first)
+    return result.reverse();
+  }
+
+  // Helper: Get single message by context and version
+  async findByVersion(contextId: string, version: number): Promise<Message | null> {
+    const [message] = await this.db
+      .select()
+      .from(messages)
+      .where(
+        and(eq(messages.contextId, contextId), eq(messages.version, version), notDeleted(messages)),
+      );
+
+    return message ?? null;
+  }
+}

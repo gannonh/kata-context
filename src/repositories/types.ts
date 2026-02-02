@@ -27,5 +27,24 @@ export class RepositoryError extends Error {
   }
 }
 
+// Message input - what callers provide when appending messages
+export type AppendMessageInput = Pick<NewMessage, "role" | "content" | "tokenCount"> & {
+  toolCallId?: string;
+  toolName?: string;
+  model?: string;
+};
+
+// Pagination options
+export interface PaginationOptions {
+  cursor?: number; // version to start after
+  limit?: number; // max messages to return (default 50)
+  order?: "asc" | "desc"; // version order (default 'asc')
+}
+
+// Token budget options
+export interface TokenBudgetOptions {
+  budget: number; // max tokens to include
+}
+
 // Re-export schema types for convenience
 export type { Context, Message, NewContext, NewMessage };
