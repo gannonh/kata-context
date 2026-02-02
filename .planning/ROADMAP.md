@@ -51,8 +51,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md - Repository foundation + testing setup (ContextRepository)
-- [ ] 04-02-PLAN.md - Message repository + token windowing (MessageRepository)
+- [x] 04-01-PLAN.md - Repository foundation + testing setup (ContextRepository)
+- [x] 04-02-PLAN.md - Message repository + token windowing (MessageRepository)
 
 **Requirements:**
 - DATA-01: Create new context with optional metadata
@@ -102,7 +102,7 @@ Plans:
 | Phase | Name | Status | Plans | Requirements |
 |-------|------|--------|-------|--------------|
 | 3 | Database Foundation | Complete | 2/2 | 8 |
-| 4 | Repository Layer | Planned | 0/2 | 6 |
+| 4 | Repository Layer | Complete | 2/2 | 6 |
 | 5 | API + Testing Layer | Pending | 0/? | 9 |
 
 **Coverage:** 23/23 requirements mapped
@@ -121,12 +121,12 @@ Plans:
 | SCHEMA-02 | 3 | Complete |
 | SCHEMA-03 | 3 | Complete |
 | SCHEMA-04 | 3 | Complete |
-| DATA-01 | 4 | Pending |
-| DATA-02 | 4 | Pending |
-| DATA-03 | 4 | Pending |
-| DATA-04 | 4 | Pending |
-| DATA-05 | 4 | Pending |
-| DATA-06 | 4 | Pending |
+| DATA-01 | 4 | Complete |
+| DATA-02 | 4 | Complete |
+| DATA-03 | 4 | Complete |
+| DATA-04 | 4 | Complete |
+| DATA-05 | 4 | Complete |
+| DATA-06 | 4 | Complete |
 | API-01 | 5 | Pending |
 | API-02 | 5 | Pending |
 | API-03 | 5 | Pending |
