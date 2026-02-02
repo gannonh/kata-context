@@ -119,6 +119,32 @@ describe("MessageRepository", () => {
       expect(inserted[0]!.toolName).toBe("calculator");
       expect(inserted[0]!.model).toBe("gpt-4");
     });
+
+    it("handles concurrent appends without version conflicts", async () => {
+      const ctx = await contextRepo.create({ name: "Concurrent Test" });
+
+      // Simulate two concurrent append operations
+      const [batch1, batch2] = await Promise.all([
+        messageRepo.append(ctx.id, [
+          { role: "user", content: "Batch 1 - Msg 1", tokenCount: 5 },
+          { role: "user", content: "Batch 1 - Msg 2", tokenCount: 5 },
+        ]),
+        messageRepo.append(ctx.id, [{ role: "user", content: "Batch 2 - Msg 1", tokenCount: 10 }]),
+      ]);
+
+      // Verify no duplicate versions
+      const allVersions = [...batch1, ...batch2].map((m) => m.version);
+      expect(new Set(allVersions).size).toBe(allVersions.length);
+
+      // Verify sequential numbering (should be 1, 2, 3 in some order)
+      expect(allVersions.sort((a, b) => a - b)).toEqual([1, 2, 3]);
+
+      // Verify final context state
+      const updated = await contextRepo.findById(ctx.id);
+      expect(updated?.messageCount).toBe(3);
+      expect(updated?.totalTokens).toBe(20);
+      expect(updated?.latestVersion).toBe(3);
+    });
   });
 
   describe("findByContext", () => {
@@ -196,6 +222,19 @@ describe("MessageRepository", () => {
       expect(result.data).toHaveLength(0);
       expect(result.hasMore).toBe(false);
     });
+
+    it("returns empty for soft-deleted context", async () => {
+      const ctx = await contextRepo.create({ name: "Test" });
+      await messageRepo.append(ctx.id, [{ role: "user", content: "Test message", tokenCount: 5 }]);
+
+      // Soft delete the context
+      await contextRepo.softDelete(ctx.id);
+
+      // Messages should not be accessible via soft-deleted context
+      const result = await messageRepo.findByContext(ctx.id);
+      expect(result.data).toHaveLength(0);
+      expect(result.hasMore).toBe(false);
+    });
   });
 
   describe("getByTokenBudget", () => {
@@ -267,6 +306,18 @@ describe("MessageRepository", () => {
       // Budget of 50 should include both (0 + 50 = 50)
       const result = await messageRepo.getByTokenBudget(ctx.id, { budget: 50 });
       expect(result).toHaveLength(2);
+    });
+
+    it("returns empty for soft-deleted context", async () => {
+      const ctx = await contextRepo.create({ name: "Test" });
+      await messageRepo.append(ctx.id, [{ role: "user", content: "Test message", tokenCount: 10 }]);
+
+      // Soft delete the context
+      await contextRepo.softDelete(ctx.id);
+
+      // Messages should not be accessible via soft-deleted context
+      const result = await messageRepo.getByTokenBudget(ctx.id, { budget: 100 });
+      expect(result).toHaveLength(0);
     });
   });
 

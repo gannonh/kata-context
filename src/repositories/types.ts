@@ -5,9 +5,6 @@ export type CreateContextInput = Pick<NewContext, "name"> & {
   metadata?: Record<string, unknown>; // Future: stored in separate column
 };
 
-// Result types - what repository returns
-export type ContextWithMessageCount = Context; // messageCount already in schema
-
 // Pagination
 export interface PaginatedResult<T> {
   data: T[];

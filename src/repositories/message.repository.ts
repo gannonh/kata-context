@@ -75,6 +75,7 @@ export class MessageRepository {
     } catch (error) {
       if (error instanceof RepositoryError) throw error;
       handleDatabaseError(error);
+      throw error; // TypeScript safety: handleDatabaseError always throws, but this ensures all paths throw
     }
   }
 
@@ -83,34 +84,50 @@ export class MessageRepository {
     contextId: string,
     options: PaginationOptions = {},
   ): Promise<PaginatedResult<Message>> {
-    const { cursor, limit = 50, order = "asc" } = options;
+    try {
+      // Check if context exists and is not soft-deleted
+      const [context] = await this.db
+        .select({ id: contexts.id })
+        .from(contexts)
+        .where(and(eq(contexts.id, contextId), notDeleted(contexts)))
+        .limit(1);
 
-    // Fetch one extra to determine if there are more
-    const fetchLimit = limit + 1;
+      if (!context) {
+        return { data: [], nextCursor: null, hasMore: false };
+      }
 
-    // Build where conditions
-    const conditions = [eq(messages.contextId, contextId), notDeleted(messages)];
+      const { cursor, limit = 50, order = "asc" } = options;
 
-    // Add cursor condition if provided
-    if (cursor !== undefined) {
-      conditions.push(
-        order === "asc" ? gt(messages.version, cursor) : lt(messages.version, cursor),
-      );
+      // Fetch one extra to determine if there are more
+      const fetchLimit = limit + 1;
+
+      // Build where conditions
+      const conditions = [eq(messages.contextId, contextId), notDeleted(messages)];
+
+      // Add cursor condition if provided
+      if (cursor !== undefined) {
+        conditions.push(
+          order === "asc" ? gt(messages.version, cursor) : lt(messages.version, cursor),
+        );
+      }
+
+      const results = await this.db
+        .select()
+        .from(messages)
+        .where(and(...conditions))
+        .orderBy(order === "asc" ? asc(messages.version) : desc(messages.version))
+        .limit(fetchLimit);
+
+      const hasMore = results.length > limit;
+      const data = hasMore ? results.slice(0, limit) : results;
+      const lastItem = data[data.length - 1];
+      const nextCursor = hasMore && lastItem ? lastItem.version : null;
+
+      return { data, nextCursor, hasMore };
+    } catch (error) {
+      handleDatabaseError(error);
+      throw error;
     }
-
-    const results = await this.db
-      .select()
-      .from(messages)
-      .where(and(...conditions))
-      .orderBy(order === "asc" ? asc(messages.version) : desc(messages.version))
-      .limit(fetchLimit);
-
-    const hasMore = results.length > limit;
-    const data = hasMore ? results.slice(0, limit) : results;
-    const lastItem = data[data.length - 1];
-    const nextCursor = hasMore && lastItem ? lastItem.version : null;
-
-    return { data, nextCursor, hasMore };
   }
 
   // DATA-06: Token-budgeted windowing (retrieve last N tokens worth of messages)
@@ -122,42 +139,67 @@ export class MessageRepository {
       return [];
     }
 
-    // Fetch messages newest-first to find the window
-    const allMessages = await this.db
-      .select()
-      .from(messages)
-      .where(and(eq(messages.contextId, contextId), notDeleted(messages)))
-      .orderBy(desc(messages.version));
+    try {
+      // Check if context exists and is not soft-deleted
+      const [context] = await this.db
+        .select({ id: contexts.id })
+        .from(contexts)
+        .where(and(eq(contexts.id, contextId), notDeleted(contexts)))
+        .limit(1);
 
-    // Accumulate until budget exceeded
-    const result: Message[] = [];
-    let tokensUsed = 0;
-
-    for (const msg of allMessages) {
-      const msgTokens = msg.tokenCount ?? 0;
-
-      // Always include at least one message, then check budget
-      if (tokensUsed + msgTokens > budget && result.length > 0) {
-        break;
+      if (!context) {
+        return [];
       }
 
-      result.push(msg);
-      tokensUsed += msgTokens;
-    }
+      // Fetch messages newest-first to find the window
+      const allMessages = await this.db
+        .select()
+        .from(messages)
+        .where(and(eq(messages.contextId, contextId), notDeleted(messages)))
+        .orderBy(desc(messages.version));
 
-    // Return in chronological order (oldest first)
-    return result.reverse();
+      // Accumulate until budget exceeded
+      const result: Message[] = [];
+      let tokensUsed = 0;
+
+      for (const msg of allMessages) {
+        const msgTokens = msg.tokenCount ?? 0;
+
+        // Always include at least one message, then check budget
+        if (tokensUsed + msgTokens > budget && result.length > 0) {
+          break;
+        }
+
+        result.push(msg);
+        tokensUsed += msgTokens;
+      }
+
+      // Return in chronological order (oldest first)
+      return result.reverse();
+    } catch (error) {
+      handleDatabaseError(error);
+      throw error;
+    }
   }
 
   // Helper: Get single message by context and version
   async findByVersion(contextId: string, version: number): Promise<Message | null> {
-    const [message] = await this.db
-      .select()
-      .from(messages)
-      .where(
-        and(eq(messages.contextId, contextId), eq(messages.version, version), notDeleted(messages)),
-      );
+    try {
+      const [message] = await this.db
+        .select()
+        .from(messages)
+        .where(
+          and(
+            eq(messages.contextId, contextId),
+            eq(messages.version, version),
+            notDeleted(messages),
+          ),
+        );
 
-    return message ?? null;
+      return message ?? null;
+    } catch (error) {
+      handleDatabaseError(error);
+      throw error;
+    }
   }
 }

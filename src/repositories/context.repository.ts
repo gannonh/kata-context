@@ -34,6 +34,7 @@ export class ContextRepository {
       return context;
     } catch (error) {
       handleDatabaseError(error);
+      throw error; // TypeScript safety: handleDatabaseError always throws, but this ensures all paths throw
     }
   }
 
@@ -41,12 +42,17 @@ export class ContextRepository {
    * DATA-02: Retrieve context by ID (excludes soft-deleted)
    */
   async findById(id: string): Promise<Context | null> {
-    const [context] = await this.db
-      .select()
-      .from(contexts)
-      .where(and(eq(contexts.id, id), notDeleted(contexts)));
+    try {
+      const [context] = await this.db
+        .select()
+        .from(contexts)
+        .where(and(eq(contexts.id, id), notDeleted(contexts)));
 
-    return context ?? null;
+      return context ?? null;
+    } catch (error) {
+      handleDatabaseError(error);
+      throw error;
+    }
   }
 
   /**
@@ -54,18 +60,23 @@ export class ContextRepository {
    * Sets deletedAt timestamp instead of removing record
    */
   async softDelete(id: string): Promise<Context | null> {
-    const [context] = await this.db
-      .update(contexts)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          eq(contexts.id, id),
-          notDeleted(contexts), // Can't delete already-deleted
-        ),
-      )
-      .returning();
+    try {
+      const [context] = await this.db
+        .update(contexts)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(contexts.id, id),
+            notDeleted(contexts), // Can't delete already-deleted
+          ),
+        )
+        .returning();
 
-    return context ?? null;
+      return context ?? null;
+    } catch (error) {
+      handleDatabaseError(error);
+      throw error;
+    }
   }
 
   /**
@@ -73,7 +84,12 @@ export class ContextRepository {
    * Used by MessageRepository to validate contextId
    */
   async exists(id: string): Promise<boolean> {
-    const context = await this.findById(id);
-    return context !== null;
+    try {
+      const context = await this.findById(id);
+      return context !== null;
+    } catch (error) {
+      handleDatabaseError(error);
+      throw error;
+    }
   }
 }
