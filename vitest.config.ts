@@ -6,6 +6,7 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/*.test.ts"],
     passWithNoTests: true,
+    testTimeout: 10000, // Allow time for PGlite migration setup
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
