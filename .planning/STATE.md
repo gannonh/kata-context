@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-01-29)
 ## Current Position
 
 Phase: 5 of 5 (API + Testing Layer) - IN PROGRESS
-Plan: 1 of ? in phase - COMPLETE
+Plan: 2 of 4 in phase - COMPLETE
 Status: In progress
-Last activity: 2026-02-02 - Completed 05-01-PLAN.md (API Foundation Layer)
+Last activity: 2026-02-02 - Completed 05-02-PLAN.md (Context CRUD Endpoints)
 
 ## Progress
 
@@ -24,17 +24,17 @@ v0.1.0 Core Setup - SHIPPED
 v0.2.0 Database + Storage Layer - IN PROGRESS
 [##########] Phase 3: Database Foundation (2/2 plans) - COMPLETE
 [##########] Phase 4: Repository Layer (2/2 plans) - COMPLETE
-[#         ] Phase 5: API + Testing Layer (1/? plans)
+[#####     ] Phase 5: API + Testing Layer (2/4 plans)
 
-Overall v0.2.0: 5/? plans complete (Phase 3+4 done, Phase 5 in progress)
+Overall v0.2.0: 6/8 plans complete (Phase 3+4 done, Phase 5 in progress)
 ```
 
 ## Performance Metrics
 
 | Metric | Value |
 |--------|-------|
-| Plans completed | 5 |
-| Requirements delivered | 14/23 (DB-01 through DB-04, SCHEMA-01 through SCHEMA-04, DATA-01 through DATA-06) |
+| Plans completed | 6 |
+| Requirements delivered | 17/23 (DB-01-04, SCHEMA-01-04, DATA-01-06, API-01-03) |
 | Phases completed | 2/3 |
 
 ## Accumulated Context
@@ -70,6 +70,10 @@ v0.2.0 decisions:
 05-01 execution decisions:
 - DEV-05-01-01: Use Zod v4 import path (zod/v4) for version compatibility
 
+05-02 execution decisions:
+- Singleton repository pattern at module scope for serverless lifecycle
+- Consistent try/catch with server-side logging, generic client messages
+
 ### Blockers
 
 (None)
@@ -85,8 +89,9 @@ v0.2.0 decisions:
 - [x] Implement MessageRepository with tests (04-02)
 - [x] Create Phase 5 plans (API + Testing Layer)
 - [x] Create API foundation layer (05-01)
-- [ ] Implement API endpoints (05-02)
-- [ ] Add API testing (05-03)
+- [x] Implement Context CRUD endpoints (05-02)
+- [ ] Implement Message endpoints (05-03)
+- [ ] Add API integration tests (05-04)
 
 ### Notes
 
@@ -99,13 +104,12 @@ v0.2.0 decisions:
 - Phase 4 complete: Repository layer operational with 31 passing tests against PGlite
   - ContextRepository: create, findById, softDelete, exists
   - MessageRepository: append, findByContext, getByTokenBudget, findByVersion
-- Phase 5 in progress: API foundation layer complete
-  - Zod validation schemas for all endpoints
-  - RFC 9457 error responses
-  - URL parsing utilities
+- Phase 5 in progress:
+  - 05-01: API foundation layer (Zod schemas, RFC 9457 errors, URL helpers)
+  - 05-02: Context CRUD endpoints (POST, GET, DELETE)
 
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 05-01-PLAN.md
-Resume with: 05-02-PLAN.md (API Endpoints)
+Stopped at: Completed 05-02-PLAN.md
+Resume with: 05-03-PLAN.md (Message Endpoints)
