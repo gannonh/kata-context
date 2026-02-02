@@ -235,6 +235,27 @@ describe("MessageRepository", () => {
       expect(result.data).toHaveLength(0);
       expect(result.hasMore).toBe(false);
     });
+
+    it("handles negative cursor gracefully", async () => {
+      const ctx = await contextRepo.create({ name: "Test" });
+      await messageRepo.append(ctx.id, [
+        { role: "user", content: "M1", tokenCount: 5 },
+        { role: "user", content: "M2", tokenCount: 5 },
+      ]);
+
+      // Negative cursor should return all messages (no version is < 0)
+      const result = await messageRepo.findByContext(ctx.id, { cursor: -1 });
+      expect(result.data).toHaveLength(2);
+    });
+
+    it("caps limit at maximum allowed value", async () => {
+      const ctx = await contextRepo.create({ name: "Test" });
+      await messageRepo.append(ctx.id, [{ role: "user", content: "M1", tokenCount: 5 }]);
+
+      // Request absurdly high limit - should be capped internally
+      const result = await messageRepo.findByContext(ctx.id, { limit: 100000 });
+      expect(result.data).toHaveLength(1);
+    });
   });
 
   describe("getByTokenBudget", () => {
@@ -317,6 +338,44 @@ describe("MessageRepository", () => {
 
       // Messages should not be accessible via soft-deleted context
       const result = await messageRepo.getByTokenBudget(ctx.id, { budget: 100 });
+      expect(result).toHaveLength(0);
+    });
+
+    it("includes message when budget exactly equals token count", async () => {
+      const ctx = await contextRepo.create({ name: "Test" });
+      await messageRepo.append(ctx.id, [
+        { role: "user", content: "First", tokenCount: 25 },
+        { role: "assistant", content: "Second", tokenCount: 25 },
+      ]);
+
+      // Budget of 25 should include only the last message (25 tokens)
+      const result = await messageRepo.getByTokenBudget(ctx.id, { budget: 25 });
+      expect(result).toHaveLength(1);
+      expect(result[0]!.content).toBe("Second");
+    });
+
+    it("returns empty for NaN budget", async () => {
+      const ctx = await contextRepo.create({ name: "Test" });
+      await messageRepo.append(ctx.id, [{ role: "user", content: "Test", tokenCount: 10 }]);
+
+      const result = await messageRepo.getByTokenBudget(ctx.id, { budget: NaN });
+      expect(result).toHaveLength(0);
+    });
+
+    it("returns empty for Infinity budget", async () => {
+      const ctx = await contextRepo.create({ name: "Test" });
+      await messageRepo.append(ctx.id, [{ role: "user", content: "Test", tokenCount: 10 }]);
+
+      // Infinity is not finite, should return empty
+      const result = await messageRepo.getByTokenBudget(ctx.id, { budget: Infinity });
+      expect(result).toHaveLength(0);
+    });
+
+    it("returns empty for negative budget", async () => {
+      const ctx = await contextRepo.create({ name: "Test" });
+      await messageRepo.append(ctx.id, [{ role: "user", content: "Test", tokenCount: 10 }]);
+
+      const result = await messageRepo.getByTokenBudget(ctx.id, { budget: -100 });
       expect(result).toHaveLength(0);
     });
   });

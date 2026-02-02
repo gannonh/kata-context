@@ -1,13 +1,7 @@
 import { and, eq } from "drizzle-orm";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import type { PgliteDatabase } from "drizzle-orm/pglite";
-import type * as schema from "../db/schema/index.js";
 import { type Context, contexts } from "../db/schema/index.js";
-import { handleDatabaseError, notDeleted } from "./helpers.js";
+import { type Database, handleDatabaseError, notDeleted } from "./helpers.js";
 import type { CreateContextInput } from "./types.js";
-
-// Support both production (node-postgres) and test (pglite) database types
-type Database = NodePgDatabase<typeof schema> | PgliteDatabase<typeof schema>;
 
 export class ContextRepository {
   constructor(private db: Database) {}

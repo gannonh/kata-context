@@ -1,9 +1,6 @@
 import { and, asc, desc, eq, gt, lt, sql } from "drizzle-orm";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import type { PgliteDatabase } from "drizzle-orm/pglite";
-import type * as schema from "../db/schema/index.js";
 import { contexts, type Message, messages } from "../db/schema/index.js";
-import { handleDatabaseError, notDeleted } from "./helpers.js";
+import { type Database, handleDatabaseError, notDeleted } from "./helpers.js";
 import type {
   AppendMessageInput,
   PaginatedResult,
@@ -12,7 +9,8 @@ import type {
 } from "./types.js";
 import { RepositoryError } from "./types.js";
 
-type Database = NodePgDatabase<typeof schema> | PgliteDatabase<typeof schema>;
+// Maximum allowed limit for pagination to prevent abuse
+const MAX_PAGINATION_LIMIT = 1000;
 
 export class MessageRepository {
   constructor(private db: Database) {}
@@ -96,7 +94,10 @@ export class MessageRepository {
         return { data: [], nextCursor: null, hasMore: false };
       }
 
-      const { cursor, limit = 50, order = "asc" } = options;
+      const { cursor, limit: requestedLimit = 50, order = "asc" } = options;
+
+      // Cap limit to prevent abuse
+      const limit = Math.min(requestedLimit, MAX_PAGINATION_LIMIT);
 
       // Fetch one extra to determine if there are more
       const fetchLimit = limit + 1;
@@ -135,7 +136,8 @@ export class MessageRepository {
   async getByTokenBudget(contextId: string, options: TokenBudgetOptions): Promise<Message[]> {
     const { budget } = options;
 
-    if (budget <= 0) {
+    // Validate budget: must be a finite positive number
+    if (!Number.isFinite(budget) || budget <= 0) {
       return [];
     }
 
