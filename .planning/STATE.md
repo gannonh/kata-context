@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-01-29)
 
 **Core value:** Policy-based context window management for AI agents
-**Current focus:** v0.2.0 Database + Storage Layer
+**Current focus:** v0.2.0 Database + Storage Layer - COMPLETE
 
 ## Current Position
 
-Phase: 5 of 5 (API + Testing Layer) - IN PROGRESS
-Plan: 3 of 4 in phase - COMPLETE
-Status: In progress
-Last activity: 2026-02-02 - Completed 05-03-PLAN.md (Message Endpoints)
+Phase: 5 of 5 (API + Testing Layer) - COMPLETE
+Plan: 4 of 4 in phase - COMPLETE
+Status: v0.2.0 milestone complete
+Last activity: 2026-02-02 - Completed 05-04-PLAN.md (API Integration Tests)
 
 ## Progress
 
@@ -21,21 +21,22 @@ v0.1.0 Core Setup - SHIPPED
 [##########] Phase 1: Foundation (2/2 plans complete)
 [##########] Phase 2: Automation and Deployment (2/2 plans complete)
 
-v0.2.0 Database + Storage Layer - IN PROGRESS
+v0.2.0 Database + Storage Layer - COMPLETE
 [##########] Phase 3: Database Foundation (2/2 plans) - COMPLETE
 [##########] Phase 4: Repository Layer (2/2 plans) - COMPLETE
-[#######   ] Phase 5: API + Testing Layer (3/4 plans)
+[##########] Phase 5: API + Testing Layer (4/4 plans) - COMPLETE
 
-Overall v0.2.0: 7/8 plans complete (Phase 3+4 done, Phase 5 nearly complete)
+Overall v0.2.0: 8/8 plans complete (All phases done)
 ```
 
 ## Performance Metrics
 
 | Metric | Value |
 |--------|-------|
-| Plans completed | 7 |
-| Requirements delivered | 20/23 (DB-01-04, SCHEMA-01-04, DATA-01-06, API-01-06) |
-| Phases completed | 2/3 |
+| Plans completed | 8 |
+| Requirements delivered | 23/23 (DB-01-04, SCHEMA-01-04, DATA-01-06, API-01-06, TEST-01-03) |
+| Phases completed | 3/3 |
+| Total tests | 87 (40 repository + 26 unit + 21 integration) |
 
 ## Accumulated Context
 
@@ -77,6 +78,11 @@ v0.2.0 decisions:
 05-03 execution decisions:
 - None (followed established patterns from 05-02)
 
+05-04 execution decisions:
+- DEV-05-04-01: Use vi.hoisted for mock variable initialization before module loading
+- DEV-05-04-02: Use vi.resetModules to re-import handlers after testDb setup
+- DEV-05-04-03: Use class constructors in mocks instead of vi.fn().mockImplementation
+
 ### Blockers
 
 (None)
@@ -94,7 +100,7 @@ v0.2.0 decisions:
 - [x] Create API foundation layer (05-01)
 - [x] Implement Context CRUD endpoints (05-02)
 - [x] Implement Message endpoints (05-03)
-- [ ] Add API integration tests (05-04)
+- [x] Add API integration tests (05-04)
 
 ### Notes
 
@@ -104,16 +110,17 @@ v0.2.0 decisions:
 - Research complete: See .planning/research/SUMMARY.md for stack decisions
 - Phase 3 complete: Database operational with contexts/messages tables, pgvector enabled
 - Health endpoint verified in production with 77ms latency, pooled connection confirmed
-- Phase 4 complete: Repository layer operational with 31 passing tests against PGlite
+- Phase 4 complete: Repository layer operational with 40 passing tests against PGlite
   - ContextRepository: create, findById, softDelete, exists
   - MessageRepository: append, findByContext, getByTokenBudget, findByVersion
-- Phase 5 in progress:
+- Phase 5 complete:
   - 05-01: API foundation layer (Zod schemas, RFC 9457 errors, URL helpers)
   - 05-02: Context CRUD endpoints (POST, GET, DELETE)
   - 05-03: Message endpoints (POST/GET messages, GET window)
+  - 05-04: Unit + integration tests (47 tests)
 
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 05-03-PLAN.md
-Resume with: 05-04-PLAN.md (API Integration Tests)
+Stopped at: Completed 05-04-PLAN.md
+Resume with: v0.2.0 complete - ready for v0.3.0 planning
