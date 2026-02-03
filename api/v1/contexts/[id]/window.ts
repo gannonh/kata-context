@@ -1,14 +1,12 @@
 import {
   errorResponse,
-  extractContextId,
-  isValidUUID,
+  requireContextId,
   successResponse,
   tokenBudgetSchema,
 } from "../../../../src/api/index.js";
 import { db } from "../../../../src/db/client.js";
-import { MessageRepository } from "../../../../src/repositories/index.js";
+import { MessageRepository, RepositoryError } from "../../../../src/repositories/index.js";
 
-// Singleton repository instance for serverless function lifecycle
 const repository = new MessageRepository(db);
 
 /**
@@ -27,38 +25,27 @@ const repository = new MessageRepository(db);
  */
 export async function GET(request: Request): Promise<Response> {
   try {
-    // Extract and validate context ID
+    const contextId = requireContextId(request);
+    if (contextId instanceof Response) return contextId;
+
     const url = new URL(request.url);
-    const contextId = extractContextId(url.pathname);
-
-    if (!contextId) {
-      return errorResponse(400, "Invalid request", "Missing context ID in URL");
-    }
-
-    if (!isValidUUID(contextId)) {
-      return errorResponse(400, "Invalid request", "Context ID must be a valid UUID");
-    }
-
-    // Parse budget query parameter
     const budget = url.searchParams.get("budget") ?? undefined;
 
-    // Validate budget param (required)
     const result = tokenBudgetSchema.safeParse({ budget });
     if (!result.success) {
       return errorResponse(400, "Validation failed", undefined, result.error.flatten());
     }
 
-    // Fetch messages within token budget via repository
-    // Note: returns empty array for non-existent context (not error)
     const messages = await repository.getByTokenBudget(contextId, {
       budget: result.data.budget,
     });
 
     return successResponse(200, { data: messages });
   } catch (error) {
-    // Log full error for server-side observability
+    if (error instanceof RepositoryError) {
+      return errorResponse(500, "Database error", error.message);
+    }
     console.error("[GET /api/v1/contexts/:id/window] Unexpected error:", error);
-
     return errorResponse(500, "Internal server error");
   }
 }

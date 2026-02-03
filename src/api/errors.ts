@@ -41,15 +41,9 @@ export function errorResponse(
     type: `https://api.kata-context.dev/errors/${status}`,
     title,
     status,
+    ...(detail ? { detail } : {}),
+    ...(errors ? { errors } : {}),
   };
-
-  if (detail) {
-    body.detail = detail;
-  }
-
-  if (errors) {
-    body.errors = errors;
-  }
 
   return new Response(JSON.stringify(body), {
     status,

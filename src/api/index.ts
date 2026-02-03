@@ -3,7 +3,7 @@
 // Error responses (RFC 9457)
 export { errorResponse } from "./errors.js";
 // URL helpers
-export { extractContextId, isValidUUID, parseJsonBody } from "./helpers.js";
+export { extractContextId, isValidUUID, parseJsonBody, requireContextId } from "./helpers.js";
 
 // Success responses
 export { successResponse } from "./responses.js";

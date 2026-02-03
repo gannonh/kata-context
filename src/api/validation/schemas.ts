@@ -14,14 +14,19 @@ export type CreateContextSchemaInput = z.infer<typeof createContextSchema>;
  * Schema for a single message in the append request
  * Matches AppendMessageInput from repositories/types.ts
  */
-const messageSchema = z.object({
-  role: z.enum(["user", "assistant", "system", "tool"]),
-  content: z.string(),
-  tokenCount: z.number().int().positive().optional(),
-  toolCallId: z.string().optional(),
-  toolName: z.string().optional(),
-  model: z.string().optional(),
-});
+const messageSchema = z
+  .object({
+    role: z.enum(["user", "assistant", "system", "tool"]),
+    content: z.string(),
+    tokenCount: z.number().int().positive().optional(),
+    toolCallId: z.string().optional(),
+    toolName: z.string().optional(),
+    model: z.string().optional(),
+  })
+  .refine((msg) => msg.role !== "tool" || msg.toolCallId, {
+    message: "toolCallId is required when role is 'tool'",
+    path: ["toolCallId"],
+  });
 
 /**
  * Schema for appending messages to a context

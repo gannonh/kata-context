@@ -1,13 +1,7 @@
-import {
-  errorResponse,
-  extractContextId,
-  isValidUUID,
-  successResponse,
-} from "../../../../src/api/index.js";
+import { errorResponse, requireContextId, successResponse } from "../../../../src/api/index.js";
 import { db } from "../../../../src/db/client.js";
-import { ContextRepository } from "../../../../src/repositories/index.js";
+import { ContextRepository, RepositoryError } from "../../../../src/repositories/index.js";
 
-// Singleton repository instance for serverless function lifecycle
 const repository = new ContextRepository(db);
 
 /**
@@ -20,31 +14,20 @@ const repository = new ContextRepository(db);
  */
 export async function GET(request: Request): Promise<Response> {
   try {
-    // Extract ID from URL path
-    const url = new URL(request.url);
-    const id = extractContextId(url.pathname);
+    const id = requireContextId(request);
+    if (id instanceof Response) return id;
 
-    if (!id) {
-      return errorResponse(400, "Invalid request", "Context ID required in URL path");
-    }
-
-    // Validate UUID format
-    if (!isValidUUID(id)) {
-      return errorResponse(400, "Invalid UUID", `"${id}" is not a valid UUID format`);
-    }
-
-    // Fetch context from repository
     const context = await repository.findById(id);
-
     if (!context) {
       return errorResponse(404, "Context not found", `No context found with ID: ${id}`);
     }
 
     return successResponse(200, { data: context });
   } catch (error) {
-    // Log full error for server-side observability
+    if (error instanceof RepositoryError) {
+      return errorResponse(500, "Database error", error.message);
+    }
     console.error("[GET /api/v1/contexts/:id] Unexpected error:", error);
-
     return errorResponse(500, "Internal server error");
   }
 }
@@ -59,31 +42,20 @@ export async function GET(request: Request): Promise<Response> {
  */
 export async function DELETE(request: Request): Promise<Response> {
   try {
-    // Extract ID from URL path
-    const url = new URL(request.url);
-    const id = extractContextId(url.pathname);
+    const id = requireContextId(request);
+    if (id instanceof Response) return id;
 
-    if (!id) {
-      return errorResponse(400, "Invalid request", "Context ID required in URL path");
-    }
-
-    // Validate UUID format
-    if (!isValidUUID(id)) {
-      return errorResponse(400, "Invalid UUID", `"${id}" is not a valid UUID format`);
-    }
-
-    // Soft delete context via repository
     const context = await repository.softDelete(id);
-
     if (!context) {
       return errorResponse(404, "Context not found", `No context found with ID: ${id}`);
     }
 
     return successResponse(200, { data: context });
   } catch (error) {
-    // Log full error for server-side observability
+    if (error instanceof RepositoryError) {
+      return errorResponse(500, "Database error", error.message);
+    }
     console.error("[DELETE /api/v1/contexts/:id] Unexpected error:", error);
-
     return errorResponse(500, "Internal server error");
   }
 }
