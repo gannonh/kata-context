@@ -17,6 +17,9 @@ importers:
       pg:
         specifier: 8.14.1
         version: 8.14.1
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
     devDependencies:
       '@biomejs/biome':
         specifier: 2.3.13
@@ -1308,6 +1311,9 @@ packages:
     engines: {node: '>= 14.6'}
     hasBin: true
 
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
 snapshots:
 
   '@biomejs/biome@2.3.13':
@@ -2212,3 +2218,5 @@ snapshots:
   xtend@4.0.2: {}
 
   yaml@2.8.2: {}
+
+  zod@4.3.6: {}

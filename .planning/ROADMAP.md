@@ -77,6 +77,14 @@ Plans:
 
 **Dependencies:** Phase 4 (repository layer)
 
+**Plans:** 4 plans
+
+Plans:
+- [x] 05-01-PLAN.md - API foundation: Zod validation schemas, response helpers, URL utilities
+- [x] 05-02-PLAN.md - Context endpoints: POST, GET, DELETE /api/v1/contexts
+- [x] 05-03-PLAN.md - Message endpoints: POST/GET messages, GET window
+- [x] 05-04-PLAN.md - Test coverage: Unit tests with mocks, integration tests with PGlite
+
 **Requirements:**
 - API-01: POST /api/v1/contexts - create new context, returns context_id
 - API-02: GET /api/v1/contexts/:id - retrieve context with metadata and message count
@@ -103,7 +111,7 @@ Plans:
 |-------|------|--------|-------|--------------|
 | 3 | Database Foundation | Complete | 2/2 | 8 |
 | 4 | Repository Layer | Complete | 2/2 | 6 |
-| 5 | API + Testing Layer | Pending | 0/? | 9 |
+| 5 | API + Testing Layer | Complete | 4/4 | 9 |
 
 **Coverage:** 23/23 requirements mapped
 
@@ -127,15 +135,15 @@ Plans:
 | DATA-04 | 4 | Complete |
 | DATA-05 | 4 | Complete |
 | DATA-06 | 4 | Complete |
-| API-01 | 5 | Pending |
-| API-02 | 5 | Pending |
-| API-03 | 5 | Pending |
-| API-04 | 5 | Pending |
-| API-05 | 5 | Pending |
-| API-06 | 5 | Pending |
-| TEST-01 | 5 | Pending |
-| TEST-02 | 5 | Pending |
-| TEST-03 | 5 | Pending |
+| API-01 | 5 | Complete |
+| API-02 | 5 | Complete |
+| API-03 | 5 | Complete |
+| API-04 | 5 | Complete |
+| API-05 | 5 | Complete |
+| API-06 | 5 | Complete |
+| TEST-01 | 5 | Complete |
+| TEST-02 | 5 | Complete |
+| TEST-03 | 5 | Complete |
 
 ---
 

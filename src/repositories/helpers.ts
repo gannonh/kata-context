@@ -1,8 +1,12 @@
 import { type Column, isNull, type SQL } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
-import { DatabaseError } from "pg";
+import pg from "pg";
 import type * as schema from "../db/schema/index.js";
+
+// Handle ESM/CJS interop for pg module
+const { DatabaseError } = pg;
+
 import { RepositoryError } from "./types.js";
 
 // Support both production (node-postgres) and test (pglite) database types
