@@ -21,15 +21,19 @@ export class ContextRepository {
 
       // Insert with returning() always returns the inserted row
       const context = result[0];
+      /* v8 ignore start: defensive — returning() always returns a row */
       if (!context) {
         throw new Error("Insert failed to return context");
       }
+      /* v8 ignore stop */
 
       return context;
+      /* v8 ignore start: catch delegates to tested handleDatabaseError */
     } catch (error) {
       handleDatabaseError(error);
-      throw error; // TypeScript safety: handleDatabaseError always throws, but this ensures all paths throw
+      throw error;
     }
+    /* v8 ignore stop */
   }
 
   /**
@@ -43,10 +47,12 @@ export class ContextRepository {
         .where(and(eq(contexts.id, id), notDeleted(contexts)));
 
       return context ?? null;
+      /* v8 ignore start: catch delegates to tested handleDatabaseError */
     } catch (error) {
       handleDatabaseError(error);
       throw error;
     }
+    /* v8 ignore stop */
   }
 
   /**
@@ -67,10 +73,12 @@ export class ContextRepository {
         .returning();
 
       return context ?? null;
+      /* v8 ignore start: catch delegates to tested handleDatabaseError */
     } catch (error) {
       handleDatabaseError(error);
       throw error;
     }
+    /* v8 ignore stop */
   }
 
   /**
@@ -81,9 +89,11 @@ export class ContextRepository {
     try {
       const context = await this.findById(id);
       return context !== null;
+      /* v8 ignore start: catch delegates to tested handleDatabaseError */
     } catch (error) {
       handleDatabaseError(error);
       throw error;
     }
+    /* v8 ignore stop */
   }
 }

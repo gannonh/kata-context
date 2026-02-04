@@ -178,6 +178,26 @@ describe("MessageRepository", () => {
       expect(result.data[1]!.content).toBe("First");
     });
 
+    it("supports descending order with cursor", async () => {
+      const ctx = await contextRepo.create({ name: "Test" });
+      await messageRepo.append(ctx.id, [
+        { role: "user", content: "M1", tokenCount: 5 },
+        { role: "user", content: "M2", tokenCount: 5 },
+        { role: "user", content: "M3", tokenCount: 5 },
+      ]);
+
+      const page1 = await messageRepo.findByContext(ctx.id, { limit: 1, order: "desc" });
+      expect(page1.data[0]!.content).toBe("M3");
+      expect(page1.hasMore).toBe(true);
+
+      const page2 = await messageRepo.findByContext(ctx.id, {
+        limit: 1,
+        order: "desc",
+        cursor: page1.nextCursor!,
+      });
+      expect(page2.data[0]!.content).toBe("M2");
+    });
+
     it("paginates with cursor", async () => {
       const ctx = await contextRepo.create({ name: "Test" });
       await messageRepo.append(ctx.id, [

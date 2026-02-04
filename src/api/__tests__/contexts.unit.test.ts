@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { RepositoryError } from "../../repositories/types.js";
 
 // Use vi.hoisted to ensure mocks are available before module loading
 const { mockCreate, mockFindById, mockSoftDelete, mockExists } = vi.hoisted(() => ({
@@ -16,6 +17,7 @@ vi.mock("../../../src/repositories/index.js", () => ({
     softDelete = mockSoftDelete;
     exists = mockExists;
   },
+  RepositoryError: RepositoryError,
 }));
 
 vi.mock("../../../src/db/client.js", () => ({
@@ -88,6 +90,7 @@ describe("POST /api/v1/contexts", () => {
   });
 
   it("returns 400 for invalid JSON", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const request = new Request("http://localhost/api/v1/contexts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -100,6 +103,7 @@ describe("POST /api/v1/contexts", () => {
     const body = await response.json();
     expect(body.title).toBe("Invalid JSON");
     expect(body.type).toContain("400");
+    warnSpy.mockRestore();
   });
 
   it("returns 400 for validation errors (name too long)", async () => {
@@ -192,6 +196,37 @@ describe("GET /api/v1/contexts/:id", () => {
     const body = await response.json();
     expect(body.title).toBe("Invalid UUID");
   });
+
+  it("returns 500 for RepositoryError", async () => {
+    mockFindById.mockRejectedValue(new RepositoryError("DB error", "DATABASE_ERROR"));
+
+    const request = new Request(
+      "http://localhost/api/v1/contexts/123e4567-e89b-12d3-a456-426614174000",
+    );
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.title).toBe("Database error");
+  });
+
+  it("returns 500 and logs unexpected error", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockFindById.mockRejectedValue(new Error("unexpected"));
+
+    const request = new Request(
+      "http://localhost/api/v1/contexts/123e4567-e89b-12d3-a456-426614174000",
+    );
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.title).toBe("Internal server error");
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
 });
 
 describe("DELETE /api/v1/contexts/:id", () => {
@@ -251,5 +286,38 @@ describe("DELETE /api/v1/contexts/:id", () => {
     expect(response.status).toBe(400);
     const body = await response.json();
     expect(body.title).toBe("Invalid UUID");
+  });
+
+  it("returns 500 for RepositoryError", async () => {
+    mockSoftDelete.mockRejectedValue(new RepositoryError("DB error", "DATABASE_ERROR"));
+
+    const request = new Request(
+      "http://localhost/api/v1/contexts/123e4567-e89b-12d3-a456-426614174000",
+      { method: "DELETE" },
+    );
+
+    const response = await DELETE(request);
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.title).toBe("Database error");
+  });
+
+  it("returns 500 and logs unexpected error", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockSoftDelete.mockRejectedValue(new Error("unexpected"));
+
+    const request = new Request(
+      "http://localhost/api/v1/contexts/123e4567-e89b-12d3-a456-426614174000",
+      { method: "DELETE" },
+    );
+
+    const response = await DELETE(request);
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.title).toBe("Internal server error");
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
   });
 });

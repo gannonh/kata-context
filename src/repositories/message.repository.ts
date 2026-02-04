@@ -70,11 +70,13 @@ export class MessageRepository {
 
         return inserted;
       });
+      /* v8 ignore start: catch delegates to tested handleDatabaseError */
     } catch (error) {
       if (error instanceof RepositoryError) throw error;
       handleDatabaseError(error);
-      throw error; // TypeScript safety: handleDatabaseError always throws, but this ensures all paths throw
+      throw error;
     }
+    /* v8 ignore stop */
   }
 
   // DATA-04: Retrieve messages with cursor-based pagination
@@ -125,10 +127,12 @@ export class MessageRepository {
       const nextCursor = hasMore && lastItem ? lastItem.version : null;
 
       return { data, nextCursor, hasMore };
+      /* v8 ignore start: catch delegates to tested handleDatabaseError */
     } catch (error) {
       handleDatabaseError(error);
       throw error;
     }
+    /* v8 ignore stop */
   }
 
   // DATA-06: Token-budgeted windowing (retrieve last N tokens worth of messages)
@@ -178,10 +182,12 @@ export class MessageRepository {
 
       // Return in chronological order (oldest first)
       return result.reverse();
+      /* v8 ignore start: catch delegates to tested handleDatabaseError */
     } catch (error) {
       handleDatabaseError(error);
       throw error;
     }
+    /* v8 ignore stop */
   }
 
   // Helper: Get single message by context and version
@@ -199,9 +205,11 @@ export class MessageRepository {
         );
 
       return message ?? null;
+      /* v8 ignore start: catch delegates to tested handleDatabaseError */
     } catch (error) {
       handleDatabaseError(error);
       throw error;
     }
+    /* v8 ignore stop */
   }
 }
