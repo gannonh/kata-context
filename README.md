@@ -1,6 +1,6 @@
 # Kata Context
 
-> **Status: v0.1.0 (Core Setup)** — Foundation established. Building in public.
+> **Status: v0.2.0 (Database + Storage Layer)** — Storage foundation complete. Building in public.
 
 ## What This Is
 
@@ -53,29 +53,26 @@ It doesn't care about:
 | **Coupling**     | Tight — hard to leave        | Loose — easy to swap          |
 | **Analogy**      | Rails                        | Postgres                      |
 
-## Usage (Coming Soon)
+## API
 
-```python
-from kata_context import Context
+REST API for context management with token-budgeted retrieval:
 
-# Use with any agent framework, or none
-ctx = Context(context_id="my-agent-session")
+```bash
+# Create a context
+curl -X POST https://your-app.vercel.app/api/v1/contexts \
+  -H "Content-Type: application/json" \
+  -d '{"metadata": {"agent": "my-agent"}}'
 
-# Store whatever you want
-ctx.append([
-    {"role": "user", "content": "Hello"},
-    {"role": "assistant", "content": "Hi there!"},
-])
+# Append messages
+curl -X POST https://your-app.vercel.app/api/v1/contexts/{id}/messages \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Hello", "tokenCount": 5}]}'
 
-# Get optimal window for your model's budget
-window = ctx.get_window(token_budget=8000, policy="balanced")
-
-# Send to ANY LLM — we don't care which
-response = openai.chat.completions.create(
-    model="gpt-4",
-    messages=window,
-)
+# Get optimal window for token budget
+curl "https://your-app.vercel.app/api/v1/contexts/{id}/window?budget=8000"
 ```
+
+SDKs for Python and TypeScript coming in v0.3.0.
 
 ## Development
 
@@ -83,24 +80,28 @@ response = openai.chat.completions.create(
 # Install dependencies
 pnpm install
 
-# Run tests
+# Run tests (87 tests, 100% coverage)
 pnpm test
 
 # Lint and format
-pnpm lint
-pnpm format
+pnpm check
+
+# Database commands
+pnpm db:generate   # Generate migrations
+pnpm db:migrate    # Apply migrations
+pnpm db:studio     # Open Drizzle Studio
 
 # Build
 pnpm build
 ```
 
-**Stack:** TypeScript 5.9, pnpm, Biome, Vitest, Vercel serverless
+**Stack:** TypeScript 5.9, pnpm, Biome, Vitest, Drizzle ORM, PostgreSQL (Neon), pgvector, Vercel serverless
 
 ## Roadmap
 
 - [x] **v0.1.0** — Core Setup (TypeScript, linting, testing, CI)
-- [ ] **v0.2.0** — Database schema and context engine
-- [ ] **v0.3.0** — TypeScript and Python SDKs
+- [x] **v0.2.0** — Database + Storage Layer (PostgreSQL, repository pattern, REST API)
+- [ ] **v0.3.0** — Policy engine (compaction, forking, semantic retrieval)
 - [ ] **v1.0** — Hosted API with multi-tenancy
 
 ## License
