@@ -83,6 +83,7 @@ describe("POST /api/v1/contexts/:id/messages", () => {
   });
 
   it("returns 400 for invalid JSON", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const request = new Request(
       "http://localhost/api/v1/contexts/123e4567-e89b-12d3-a456-426614174000/messages",
       {
@@ -97,6 +98,7 @@ describe("POST /api/v1/contexts/:id/messages", () => {
     expect(response.status).toBe(400);
     const body = await response.json();
     expect(body.title).toBe("Invalid JSON");
+    warnSpy.mockRestore();
   });
 
   it("returns 400 for empty messages array", async () => {
@@ -171,6 +173,51 @@ describe("POST /api/v1/contexts/:id/messages", () => {
     expect(response.status).toBe(400);
     const body = await response.json();
     expect(body.detail).toContain("UUID");
+  });
+
+  it("returns 500 for RepositoryError with non-NOT_FOUND code", async () => {
+    mockAppend.mockRejectedValue(new RepositoryError("DB error", "DATABASE_ERROR"));
+
+    const request = new Request(
+      "http://localhost/api/v1/contexts/123e4567-e89b-12d3-a456-426614174000/messages",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "Hello" }],
+        }),
+      },
+    );
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.title).toBe("Database error");
+  });
+
+  it("returns 500 and logs unexpected error", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockAppend.mockRejectedValue(new Error("unexpected"));
+
+    const request = new Request(
+      "http://localhost/api/v1/contexts/123e4567-e89b-12d3-a456-426614174000/messages",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "Hello" }],
+        }),
+      },
+    );
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.title).toBe("Internal server error");
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
   });
 });
 
@@ -260,6 +307,37 @@ describe("GET /api/v1/contexts/:id/messages", () => {
     const body = await response.json();
     expect(body.detail).toContain("UUID");
   });
+
+  it("returns 500 for RepositoryError", async () => {
+    mockFindByContext.mockRejectedValue(new RepositoryError("DB error", "DATABASE_ERROR"));
+
+    const request = new Request(
+      "http://localhost/api/v1/contexts/123e4567-e89b-12d3-a456-426614174000/messages",
+    );
+
+    const response = await GET_MESSAGES(request);
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.title).toBe("Database error");
+  });
+
+  it("returns 500 and logs unexpected error", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockFindByContext.mockRejectedValue(new Error("unexpected"));
+
+    const request = new Request(
+      "http://localhost/api/v1/contexts/123e4567-e89b-12d3-a456-426614174000/messages",
+    );
+
+    const response = await GET_MESSAGES(request);
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.title).toBe("Internal server error");
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
 });
 
 describe("GET /api/v1/contexts/:id/window", () => {
@@ -333,5 +411,36 @@ describe("GET /api/v1/contexts/:id/window", () => {
     expect(response.status).toBe(400);
     const body = await response.json();
     expect(body.detail).toContain("UUID");
+  });
+
+  it("returns 500 for RepositoryError", async () => {
+    mockGetByTokenBudget.mockRejectedValue(new RepositoryError("DB error", "DATABASE_ERROR"));
+
+    const request = new Request(
+      "http://localhost/api/v1/contexts/123e4567-e89b-12d3-a456-426614174000/window?budget=100",
+    );
+
+    const response = await GET_WINDOW(request);
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.title).toBe("Database error");
+  });
+
+  it("returns 500 and logs unexpected error", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockGetByTokenBudget.mockRejectedValue(new Error("unexpected"));
+
+    const request = new Request(
+      "http://localhost/api/v1/contexts/123e4567-e89b-12d3-a456-426614174000/window?budget=100",
+    );
+
+    const response = await GET_WINDOW(request);
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.title).toBe("Internal server error");
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
   });
 });
