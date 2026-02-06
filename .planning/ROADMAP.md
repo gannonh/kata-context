@@ -64,6 +64,10 @@ Policy-based context window management for AI agents. This roadmap covers the co
 **Goal:** Establish infrastructure dependencies and policy configuration storage for subsequent phases.
 
 **Dependencies:** None (foundation phase)
+**Plans:** 2 (2 waves)
+
+- [ ] 06-01: Infrastructure setup (gpt-tokenizer, schema extensions, migration, validation module)
+- [ ] 06-02: Repository layer update + tests (policy config CRUD, token counting tests, coverage)
 
 **Requirements:**
 - INFRA-01: Add gpt-tokenizer dependency for token counting
