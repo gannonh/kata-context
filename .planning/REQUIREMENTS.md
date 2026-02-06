@@ -57,7 +57,7 @@
 ## Future Requirements (Deferred)
 
 ### Compaction Enhancements
-- Reversible compaction (large outputs → file references)
+- Reversible compaction (large outputs to file references)
 - Structured compaction templates (domain-specific summaries)
 - Iterative summary merging (vs full regeneration)
 - Interval-based compaction (every N messages)
@@ -93,36 +93,34 @@
 
 ## Traceability
 
-*To be updated by roadmapper*
-
 | Requirement | Phase | Plan | Status |
 |-------------|-------|------|--------|
-| COMP-01 | — | — | Pending |
-| COMP-02 | — | — | Pending |
-| COMP-03 | — | — | Pending |
-| COMP-04 | — | — | Pending |
-| COMP-05 | — | — | Pending |
-| COMP-06 | — | — | Pending |
-| FORK-01 | — | — | Pending |
-| FORK-02 | — | — | Pending |
-| FORK-03 | — | — | Pending |
-| FORK-04 | — | — | Pending |
-| TIME-01 | — | — | Pending |
-| TIME-02 | — | — | Pending |
-| TIME-03 | — | — | Pending |
-| POLICY-01 | — | — | Pending |
-| POLICY-02 | — | — | Pending |
-| POLICY-03 | — | — | Pending |
-| API-01 | — | — | Pending |
-| API-02 | — | — | Pending |
-| API-03 | — | — | Pending |
-| API-04 | — | — | Pending |
-| API-05 | — | — | Pending |
-| API-06 | — | — | Pending |
-| API-07 | — | — | Pending |
-| INFRA-01 | — | — | Pending |
-| INFRA-02 | — | — | Pending |
-| INFRA-03 | — | — | Pending |
+| INFRA-01 | Phase 1 | - | Pending |
+| INFRA-02 | Phase 1 | - | Pending |
+| INFRA-03 | Phase 1 | - | Pending |
+| POLICY-01 | Phase 1 | - | Pending |
+| POLICY-02 | Phase 1 | - | Pending |
+| POLICY-03 | Phase 1 | - | Pending |
+| FORK-01 | Phase 2 | - | Pending |
+| FORK-02 | Phase 2 | - | Pending |
+| FORK-03 | Phase 2 | - | Pending |
+| FORK-04 | Phase 2 | - | Pending |
+| TIME-01 | Phase 2 | - | Pending |
+| TIME-02 | Phase 2 | - | Pending |
+| TIME-03 | Phase 2 | - | Pending |
+| COMP-01 | Phase 3 | - | Pending |
+| COMP-02 | Phase 3 | - | Pending |
+| COMP-03 | Phase 3 | - | Pending |
+| COMP-04 | Phase 3 | - | Pending |
+| COMP-05 | Phase 3 | - | Pending |
+| COMP-06 | Phase 3 | - | Pending |
+| API-01 | Phase 4 | - | Pending |
+| API-02 | Phase 4 | - | Pending |
+| API-03 | Phase 4 | - | Pending |
+| API-04 | Phase 4 | - | Pending |
+| API-05 | Phase 4 | - | Pending |
+| API-06 | Phase 4 | - | Pending |
+| API-07 | Phase 4 | - | Pending |
 
 ---
 

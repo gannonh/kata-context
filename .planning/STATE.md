@@ -2,17 +2,17 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-04)
+See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Policy-based context window management for AI agents
-**Current focus:** Planning next milestone
+**Current focus:** v0.3.0 Policy Engine
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-05 — Milestone v0.3.0 started
+Phase: 1 - Infrastructure + Policy Foundation
+Plan: Not started
+Status: Ready for planning
+Last activity: 2026-02-05 - Roadmap created
 
 ## Progress
 
@@ -25,7 +25,21 @@ v0.2.0 Database + Storage Layer - SHIPPED
 [##########] Phase 3: Database Foundation (2/2 plans) - COMPLETE
 [##########] Phase 4: Repository Layer (2/2 plans) - COMPLETE
 [##########] Phase 5: API + Testing Layer (4/4 plans) - COMPLETE
+
+v0.3.0 Policy Engine - IN PROGRESS
+[          ] Phase 1: Infrastructure + Policy Foundation (0/? plans) - READY
+[          ] Phase 2: Forking + Time-Travel (0/? plans) - PENDING
+[          ] Phase 3: Compaction Core (0/? plans) - PENDING
+[          ] Phase 4: API Layer (0/? plans) - PENDING
 ```
+
+## Performance Metrics
+
+| Milestone | Duration | Phases | Plans | Reqs |
+|-----------|----------|--------|-------|------|
+| v0.1.0 | 1 day | 2 | 4 | 8 |
+| v0.2.0 | 6 days | 3 | 8 | 23 |
+| v0.3.0 | In progress | 4 | TBD | 26 |
 
 ## Accumulated Context
 
@@ -33,22 +47,37 @@ v0.2.0 Database + Storage Layer - SHIPPED
 
 See PROJECT.md Key Decisions table for cumulative record.
 
+**v0.3.0 specific:**
+- gpt-tokenizer for token counting (fastest, smallest bundle)
+- JSONB column for policy storage (no separate table)
+- Copy-on-write for forking (simple queries, trade storage for speed)
+- Version-based time-travel (not timestamp-based)
+- Synchronous compaction via API call (async deferred)
+
 ### Blockers
 
 (None)
 
 ### TODOs
 
-(None -- milestone complete)
+- [ ] Plan Phase 1
+- [ ] Execute Phase 1
+- [ ] Plan Phase 2
+- [ ] Execute Phase 2
+- [ ] Plan Phase 3
+- [ ] Execute Phase 3
+- [ ] Plan Phase 4
+- [ ] Execute Phase 4
 
 ### Notes
 
-- v0.1.0 shipped with full developer workflow and CI infrastructure
-- v0.2.0 shipped with storage foundation, repository layer, and REST API
-- Stack: pnpm 10.x, Node.js 24.x, TypeScript 5.9.x, Biome 2.3.x, Vitest 4.x, Zod 4.x, Drizzle ORM 0.45.1, pg 8.14.1
+- Research complete with HIGH confidence across all areas
+- Existing schema supports forking (parentId, forkVersion) and time-travel (version)
+- Critical pitfall: never renumber versions during compaction
+- Critical pitfall: copy-on-write for forks to survive parent deletion
 
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: v0.3.0 milestone requirements definition
-Resume with: Continue requirements → roadmap creation
+Stopped at: Roadmap creation complete
+Resume with: `/kata:kata-plan-phase 1` to plan Infrastructure + Policy Foundation
