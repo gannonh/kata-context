@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 6 - Infrastructure + Policy Foundation
-Plan: 1 of 2
-Status: In progress
-Last activity: 2026-02-06 - Completed 06-01-PLAN.md
+Plan: 2 of 2
+Status: Phase complete
+Last activity: 2026-02-06 - Completed 06-02-PLAN.md
 
-Progress: [#####     ] Phase 6 Plan 1/2
+Progress: [##########] Phase 6 Plan 2/2
 
 ## Progress
 
@@ -29,7 +29,7 @@ v0.2.0 Database + Storage Layer - SHIPPED
 [##########] Phase 5: API + Testing Layer (4/4 plans) - COMPLETE
 
 v0.3.0 Policy Engine - IN PROGRESS
-[#####     ] Phase 6: Infrastructure + Policy Foundation (1/2 plans) - IN PROGRESS
+[##########] Phase 6: Infrastructure + Policy Foundation (2/2 plans) - COMPLETE
 [          ] Phase 7: Forking + Time-Travel (0/? plans) - PENDING
 [          ] Phase 8: Compaction Core (0/? plans) - PENDING
 [          ] Phase 9: API Layer (0/? plans) - PENDING
@@ -58,6 +58,8 @@ See PROJECT.md Key Decisions table for cumulative record.
 - PolicyConfig type sourced from Zod schema (single source of truth), imported by Drizzle schema via `.$type<>()`
 - Application-layer defaults via Zod `.default()`, not SQL DEFAULT (enables partial object merging)
 - All new columns nullable (NULL = use system defaults / not compacted)
+- Repository stores policyConfig as-is; defaults resolved at application layer via resolvePolicy()
+- API schema reuses policyConfigSchema from validation module (single source of truth)
 
 ### Blockers
 
@@ -66,7 +68,7 @@ See PROJECT.md Key Decisions table for cumulative record.
 ### TODOs
 
 - [x] Plan Phase 6
-- [ ] Execute Phase 6 (Plan 01 complete, Plan 02 remaining)
+- [x] Execute Phase 6 (Plan 01 + Plan 02 complete)
 - [ ] Plan Phase 7
 - [ ] Execute Phase 7
 - [ ] Plan Phase 8
@@ -81,9 +83,10 @@ See PROJECT.md Key Decisions table for cumulative record.
 - Critical pitfall: never renumber versions during compaction
 - Critical pitfall: copy-on-write for forks to survive parent deletion
 - Migration 0002_sturdy_post.sql adds 3 columns (policy_config, compacted_at, compacted_into_version)
+- Phase 6 complete: 162 tests, 100% coverage, all INFRA and POLICY requirements satisfied
 
 ## Session Continuity
 
-Last session: 2026-02-06T20:07:12Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-02-06T20:13:47Z
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None
