@@ -32,9 +32,9 @@
 
 ### Policy Configuration (POLICY)
 
-- [ ] **POLICY-01**: User can store compaction policy configuration per context
-- [ ] **POLICY-02**: System applies default policy when no context-specific policy exists
-- [ ] **POLICY-03**: Policy includes: threshold, preserve_recent_count, enabled flag
+- [x] **POLICY-01**: User can store compaction policy configuration per context
+- [x] **POLICY-02**: System applies default policy when no context-specific policy exists
+- [x] **POLICY-03**: Policy includes: threshold, preserve_recent_count, enabled flag
 
 ### API Endpoints (API)
 
@@ -48,9 +48,9 @@
 
 ### Infrastructure (INFRA)
 
-- [ ] **INFRA-01**: Add gpt-tokenizer dependency for token counting
-- [ ] **INFRA-02**: Add policy_config JSONB column to contexts table
-- [ ] **INFRA-03**: Add compaction tracking columns to messages (compacted_at, compacted_into_version)
+- [x] **INFRA-01**: Add gpt-tokenizer dependency for token counting
+- [x] **INFRA-02**: Add policy_config JSONB column to contexts table
+- [x] **INFRA-03**: Add compaction tracking columns to messages (compacted_at, compacted_into_version)
 
 ---
 
@@ -95,12 +95,12 @@
 
 | Requirement | Phase | Plan | Status |
 |-------------|-------|------|--------|
-| INFRA-01 | Phase 1 | - | Pending |
-| INFRA-02 | Phase 1 | - | Pending |
-| INFRA-03 | Phase 1 | - | Pending |
-| POLICY-01 | Phase 1 | - | Pending |
-| POLICY-02 | Phase 1 | - | Pending |
-| POLICY-03 | Phase 1 | - | Pending |
+| INFRA-01 | Phase 6 | 06-01 | Complete |
+| INFRA-02 | Phase 6 | 06-01 | Complete |
+| INFRA-03 | Phase 6 | 06-01 | Complete |
+| POLICY-01 | Phase 6 | 06-02 | Complete |
+| POLICY-02 | Phase 6 | 06-02 | Complete |
+| POLICY-03 | Phase 6 | 06-02 | Complete |
 | FORK-01 | Phase 2 | - | Pending |
 | FORK-02 | Phase 2 | - | Pending |
 | FORK-03 | Phase 2 | - | Pending |
@@ -124,4 +124,4 @@
 
 ---
 
-*Last updated: 2026-02-05*
+*Last updated: 2026-02-06*

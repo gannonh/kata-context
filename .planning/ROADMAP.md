@@ -66,8 +66,8 @@ Policy-based context window management for AI agents. This roadmap covers the co
 **Dependencies:** None (foundation phase)
 **Plans:** 2 (2 waves)
 
-- [ ] 06-01: Infrastructure setup (gpt-tokenizer, schema extensions, migration, validation module)
-- [ ] 06-02: Repository layer update + tests (policy config CRUD, token counting tests, coverage)
+- [x] 06-01: Infrastructure setup (gpt-tokenizer, schema extensions, migration, validation module)
+- [x] 06-02: Repository layer update + tests (policy config CRUD, token counting tests, coverage)
 
 **Requirements:**
 - INFRA-01: Add gpt-tokenizer dependency for token counting
@@ -162,10 +162,10 @@ Policy-based context window management for AI agents. This roadmap covers the co
 |-----------|--------|--------|-------|--------------|
 | v0.1.0 Core Setup | Shipped | 2/2 | 4/4 | Complete |
 | v0.2.0 Database + Storage | Shipped | 3/3 | 8/8 | Complete |
-| v0.3.0 Policy Engine | In Progress | 0/4 | 0/? | 0/26 |
+| v0.3.0 Policy Engine | In Progress | 1/4 | 2/? | 6/26 |
 | v0.4.0 SDK Layer | Planned | - | - | - |
 | v1.0.0 Commercial MVP | Planned | - | - | - |
 
 ---
 
-*Last updated: 2026-02-05*
+*Last updated: 2026-02-06*

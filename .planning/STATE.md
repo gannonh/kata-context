@@ -87,6 +87,6 @@ See PROJECT.md Key Decisions table for cumulative record.
 
 ## Session Continuity
 
-Last session: 2026-02-06T20:13:47Z
-Stopped at: Completed 06-02-PLAN.md
-Resume file: None
+Last session: 2026-02-06
+Stopped at: Phase 6 complete, verified (10/10 must-haves)
+Resume with: `/kata:kata-discuss-phase 7` to prepare Forking + Time-Travel
