@@ -471,3 +471,512 @@ Before deploying database integration:
 - [Neon: Promoting Postgres Changes Safely](https://neon.com/blog/promoting-postgres-changes-safely-production)
 - [Neon: Zero downtime migrations with pgroll](https://neon.com/guides/pgroll)
 - [AWS: Optimize pgvector indexing](https://aws.amazon.com/blogs/database/optimize-generative-ai-applications-with-pgvector-indexing-a-deep-dive-into-ivfflat-and-hnsw-techniques/)
+
+---
+---
+
+# Domain Pitfalls: Context Policy Engine (Compaction, Forking, Time-Travel)
+
+**Domain:** Adding policy engine features to existing context storage system
+**Researched:** 2026-02-05
+**Confidence:** HIGH (verified against official docs, research papers, existing schema analysis)
+
+**Existing System Context:**
+- Soft-delete for contexts (`deletedAt` timestamp)
+- Versioned messages (sequential `version` per context)
+- Token-budgeted windowing (`totalTokens` tracking)
+- Fork tracking (`parentId`, `forkVersion` on contexts)
+- CASCADE delete from contexts to messages
+
+---
+
+## Critical Pitfalls
+
+Mistakes that cause rewrites, data loss, or fundamental system failures.
+
+---
+
+### Pitfall 13: Compaction Destroys Critical Low-Entropy Details
+
+**What goes wrong:** Summarization-based compaction treats all content equally, causing "low-entropy" details like file paths, tool call IDs, and version numbers to be discarded. The system tokens these items lower priority because they appear simple from an information-theoretic perspective, but they're exactly what the agent needs to continue work.
+
+**Why it happens:** Generic summarization optimizes for compression ratio rather than task continuation. Factory.ai's research found that "file paths might be low-entropy from an information-theoretic perspective, but [are] exactly what the agent needs." OpenAI achieved 99.3% token reduction but scored 0.35 points lower on task quality, requiring expensive re-fetching that exceeded original savings.
+
+**Consequences:**
+- Agents re-read files they already examined
+- Agents make conflicting edits to files they forgot modifying
+- Agents lose track of test results and progress markers
+- Context ID references become orphaned
+
+**Warning signs:**
+- Agents asking for clarification after compaction when they shouldn't need it
+- Agents prematurely declaring tasks complete
+- Increasing token usage despite compaction (re-fetching overhead)
+- Duplicate tool calls in conversation history
+
+**Prevention:**
+1. **Preserve structured metadata separately from prose summary.** Keep a dedicated artifact index (files modified, tool calls made, version pointers) that survives compaction intact.
+2. **Use probe-based evaluation** with four question types (recall, artifact, continuation, decision) rather than ROUGE/embedding similarity, which fail to measure functional continuation.
+3. **Test with artificial compression frequency** (10-20% of window) during development to isolate mechanism failures early.
+
+**Detection in existing system:**
+The current `messages` table stores `toolCallId`, `toolName`, and `model` fields. Compaction must preserve these structured fields in a side index, not summarize them.
+
+**Phase to address:** Compaction policy phase. Implement artifact tracking before building summarization.
+
+**Sources:**
+- [Factory.ai: Evaluating Context Compression for AI Agents](https://factory.ai/news/evaluating-compression)
+- [Google ADK: Context Compaction](https://google.github.io/adk-docs/context/compaction/)
+
+---
+
+### Pitfall 14: Fork Reference Loss on Parent Deletion
+
+**What goes wrong:** When a parent context is soft-deleted, forked children lose the ability to reconstruct their full history. The current schema uses `SET NULL` on delete for `parentId`, which preserves the child but orphans the lineage.
+
+**Why it happens:** The schema correctly prevents cascading deletes (children should survive parent deletion), but doesn't preserve enough information to reconstruct the fork point. After parent deletion, `forkVersion` points to a version that no longer exists in an accessible context.
+
+**Consequences:**
+- Time-travel queries on forked contexts fail at the fork boundary
+- Message history reconstruction becomes impossible for pre-fork messages
+- Audit trails break when tracing conversation lineage
+- Orphaned data accumulates with no cleanup path
+
+**Warning signs:**
+- `findById` returns null when following `parentId`
+- `forkVersion` points to non-existent version in parent
+- Growing count of contexts where `parentId IS NULL AND forkVersion IS NOT NULL`
+
+**Prevention:**
+1. **Copy pre-fork messages to child at fork time** rather than reference them. This is copy-on-write semantics at the message level.
+2. **Alternatively, preserve parent messages even when parent is soft-deleted** by only allowing full deletion after all children are deleted.
+3. **Add `forkSourceDeleted` boolean** to track when parent was deleted, enabling graceful degradation.
+
+**Detection in existing system:**
+Query for inconsistent state:
+```sql
+SELECT * FROM contexts WHERE parent_id IS NULL AND fork_version IS NOT NULL
+```
+
+**Phase to address:** Forking phase. Decision on copy-on-write vs reference semantics must be made before implementing fork operations.
+
+**Sources:**
+- [LibreChat: Forking Messages and Conversations](https://www.librechat.ai/docs/features/fork)
+- [Hypirion: Implementing System-Versioned Tables in Postgres](https://hypirion.com/musings/implementing-system-versioned-tables-in-postgres)
+
+---
+
+### Pitfall 15: Version Counter Conflicts After Compaction
+
+**What goes wrong:** When forking a context, the child inherits `latestVersion` from the parent at fork time. If compaction later renumbers or consolidates messages in either context, version references in external systems break.
+
+**Why it happens:** The current system uses `latestVersion` as a monotonically increasing counter per context. This works for single-context scenarios but creates problems when:
+- External systems store `(contextId, version)` tuples as references
+- Compaction consolidates multiple messages into summaries
+- Time-travel queries need to map "logical version" to "physical version"
+
+**Consequences:**
+- External systems holding version references get 404s after compaction
+- Cursor-based pagination breaks when versions are renumbered
+- Fork comparison features become impossible (can't diff parent/child when versions drift)
+
+**Warning signs:**
+- `findByVersion` returning null for versions that should exist
+- Pagination cursors becoming invalid unexpectedly
+- Inconsistent `messageCount` vs actual message count after compaction
+
+**Prevention:**
+1. **Never renumber versions.** Treat version as immutable identity, not sequential ordering.
+2. **Use gaps in version sequence** for compacted messages rather than consolidation.
+3. **Add `compactedIntoVersion`** field to soft-deleted compacted messages, preserving audit trail.
+4. **Store both `logicalVersion` and `physicalVersion`** if renumbering is required.
+
+**Detection in existing system:**
+The unique constraint `messages_context_version_unique` prevents version reuse but doesn't prevent gaps. The `FOR UPDATE` lock in `append()` protects against concurrent version assignment but doesn't address compaction scenarios.
+
+**Phase to address:** Compaction phase. Version semantics must be locked down before any compaction implementation.
+
+**Sources:**
+- [Chris Kiehl: Event Sourcing is Hard](https://chriskiehl.com/article/event-sourcing-is-hard)
+- [Hypirion: Implementing System-Versioned Tables in Postgres](https://hypirion.com/musings/implementing-system-versioned-tables-in-postgres)
+
+---
+
+### Pitfall 16: Token Count Drift Across Models
+
+**What goes wrong:** The existing system stores `tokenCount` per message and uses `getByTokenBudget()` for windowing. However, token counts vary significantly between models. A budget of 4000 tokens calculated with GPT-4's tokenizer will be wrong for Claude, which tokenizes differently.
+
+**Why it happens:** Tokenization is model-specific:
+- Non-Latin scripts inflate token counts on some models
+- Code with special characters tokenizes inconsistently
+- The "1 token = 4 characters" heuristic fails for structured data
+- Different model versions (GPT-4 vs GPT-4o) use different tokenizers
+
+**Consequences:**
+- Token budgets that work for one model cause truncation on another
+- Compaction triggers at wrong thresholds
+- Context window overflow or underutilization
+- Inconsistent behavior when switching models mid-conversation
+
+**Warning signs:**
+- API errors about context length exceeded despite budget compliance
+- Wasted context capacity (budgeted 4K, only used 2K)
+- `model` field in messages shows multiple different models
+
+**Prevention:**
+1. **Store tokenizer identifier alongside tokenCount**, not just raw count.
+2. **Provide re-tokenization capability** for budget calculations when model changes.
+3. **Use conservative estimates** (pad by 10-20%) for cross-model scenarios.
+4. **Document that `tokenCount` is advisory**, not authoritative.
+
+**Detection in existing system:**
+The current `messages.model` field exists but `tokenCount` has no associated tokenizer. Budget queries assume homogeneous tokenization.
+
+**Phase to address:** First phase where token budgeting is used cross-model. May require schema migration to add `tokenizer` field.
+
+**Sources:**
+- [Winder.ai: Calculating Token Counts](https://winder.ai/calculating-token-counts-llm-context-windows-practical-guide/)
+- [Chroma Research: Context Rot](https://research.trychroma.com/context-rot)
+
+---
+
+### Pitfall 17: Time-Travel Queries Return Inconsistent State
+
+**What goes wrong:** Point-in-time queries on temporal data return inconsistent state when using `CLOCK_TIMESTAMP()` instead of `NOW()` for versioning. Multi-row inserts (like batch message append) generate different timestamps per row, making reconstruction at arbitrary past moments unreliable.
+
+**Why it happens:** PostgreSQL's `CLOCK_TIMESTAMP()` returns actual current time, advancing between rows in a batch. `NOW()` returns transaction start time, which is stable within a transaction but prevents seeing changes made earlier in the same transaction.
+
+**Consequences:**
+- Batch-inserted messages have different `createdAt` timestamps
+- Point-in-time reconstruction may include partial batches
+- Audit queries return inconsistent snapshots
+- Fork-point reconstruction gets wrong set of messages
+
+**Warning signs:**
+- Messages from same `append()` call have different `createdAt` values
+- Time-travel query for 12:00:00.500 includes some but not all messages inserted at "12:00:00"
+- Forked context appears to have messages the parent didn't have at fork time
+
+**Prevention:**
+1. **Use transaction timestamp** (`NOW()`) for all messages in a batch, not wall-clock time.
+2. **Add explicit `batchId`** or `transactionId` to group atomically-inserted messages.
+3. **Use version-based time-travel** (not timestamp-based) as primary mechanism.
+4. **Document that `createdAt` is approximate**, not precise boundary.
+
+**Detection in existing system:**
+Current `append()` uses `createdAt: timestamp().defaultNow()` which uses `NOW()` at insert time. Verify this behavior under batch inserts. The `version` field provides reliable ordering.
+
+**Phase to address:** Time-travel phase. Clarify semantics before implementing point-in-time queries.
+
+**Sources:**
+- [Hypirion: Implementing System-Versioned Tables in Postgres](https://hypirion.com/musings/implementing-system-versioned-tables-in-postgres)
+- [Microsoft: Temporal Tables in SQL Server](https://learn.microsoft.com/en-us/sql/relational-databases/tables/temporal-tables)
+
+---
+
+## Moderate Pitfalls
+
+Mistakes that cause delays, technical debt, or degraded user experience.
+
+---
+
+### Pitfall 18: Compaction Loops from Circular Event Dependencies
+
+**What goes wrong:** A compaction event triggers updates to context metadata, which triggers another compaction evaluation, creating infinite loops that consume resources.
+
+**Why it happens:** Event-driven architectures can create cycles:
+- Compaction updates `totalTokens` (context modified)
+- Modified context triggers compaction policy re-evaluation
+- Policy sees modified context and runs compaction
+- Repeat
+
+**Consequences:**
+- Resource exhaustion (CPU, database connections)
+- Deadlocks in transaction-heavy implementations
+- Silent failures when circuit breakers trip
+- Inconsistent state if loop terminates mid-cycle
+
+**Warning signs:**
+- Compaction jobs that never complete
+- Database connection pool exhaustion during compaction
+- Multiple compaction records for same time window
+
+**Prevention:**
+1. **Explicit loop guards**: Track "compaction in progress" state per context.
+2. **Separate compaction metadata updates** from content updates in policy evaluation.
+3. **Use idempotent compaction**: Same input always produces same output, no retrigger.
+4. **Add rate limiting**: Maximum one compaction per context per time window.
+
+**Phase to address:** Compaction policy phase. Add guards before implementing any triggered compaction.
+
+**Sources:**
+- [Kite Metric: Event Sourcing Fails](https://kitemetric.com/blogs/event-sourcing-fails-5-real-world-lessons)
+
+---
+
+### Pitfall 19: Soft-Delete Unique Constraint Violations
+
+**What goes wrong:** Current schema has no unique constraints on context `name`, but future features might need uniqueness (e.g., named branches, workspace contexts). Standard unique indexes don't differentiate between active and soft-deleted rows.
+
+**Why it happens:** A regular unique index includes deleted rows. If user creates "project-A" context, deletes it, then tries to create new "project-A" context, the constraint fails.
+
+**Consequences:**
+- Users cannot reuse names after deletion
+- Confusing error messages ("name already exists" for deleted items)
+- Workarounds (appending timestamps) pollute namespace
+- Application-level uniqueness checks introduce race conditions
+
+**Warning signs:**
+- Constraint violations when creating contexts with "deleted" names
+- Growing list of contexts with timestamp-suffixed names
+- Duplicate active contexts (if app-level check has race condition)
+
+**Prevention:**
+1. **Use PostgreSQL partial indexes**:
+   ```sql
+   CREATE UNIQUE INDEX uq_contexts_name_active ON contexts (name)
+   WHERE deleted_at IS NULL;
+   ```
+2. **Design uniqueness requirements early**, before data accumulates.
+3. **Keep constraint enforcement in database**, not application layer.
+
+**Detection in existing system:**
+No unique constraints on `name` currently. Safe for now, but consider before adding named-context features.
+
+**Phase to address:** Any phase adding named/unique context identifiers.
+
+**Sources:**
+- [DEV Community: Why Soft Delete Can Backfire on Data Consistency](https://dev.to/mrakdon/why-soft-delete-can-backfire-on-data-consistency-4epl)
+- [Cultured Systems: Avoiding the Soft Delete Anti-Pattern](https://www.cultured.systems/2024/04/24/Soft-delete/)
+
+---
+
+### Pitfall 20: Lost-in-the-Middle Effect After Compaction
+
+**What goes wrong:** LLMs weigh the beginning and end of prompts more heavily (primacy and recency bias). Compaction that places summarized content in the middle of context loses important information to attention degradation.
+
+**Why it happens:** Research from Chroma shows that "even when your content fits within the allowed token count, you can still face problems like the lost-in-the-middle effect." Critical context placed in the middle may be undervalued regardless of token budget compliance.
+
+**Consequences:**
+- Agent ignores summarized historical context
+- Early decisions forgotten despite being in summary
+- Inconsistent behavior based on summary position
+- False impression that compaction "worked" when agent actually lost track
+
+**Warning signs:**
+- Agent behavior differs based on where summary appears in context
+- Agent re-asks questions whose answers are in summary
+- Agent contradicts decisions documented in summary
+
+**Prevention:**
+1. **Place critical information in first 25%** of reconstructed context.
+2. **Structure summaries with "current state" first**, history second.
+3. **Test with summary at different positions** to validate attention patterns.
+4. **Use structured extraction** (key-value pairs) over prose summaries for critical data.
+
+**Phase to address:** Compaction policy phase. Inform summary format and positioning decisions.
+
+**Sources:**
+- [Chroma Research: Context Rot](https://research.trychroma.com/context-rot)
+- [Getmaxim: Context Window Management Strategies](https://www.getmaxim.ai/articles/context-window-management-strategies-for-long-context-ai-agents-and-chatbots/)
+
+---
+
+### Pitfall 21: Cumulative Compression Loss Across Multiple Cycles
+
+**What goes wrong:** Each compression cycle introduces information loss. Over long-running conversations, regenerating summaries from scratch (rather than incrementally merging) causes gradual detail drift where early context becomes increasingly distorted.
+
+**Why it happens:** Factory.ai found that "regenerating summaries from scratch rather than incrementally merging causes gradual detail drift across multiple compressions." Each summarization introduces approximation errors that compound.
+
+**Consequences:**
+- Early conversation context becomes increasingly inaccurate
+- Agent personality/preferences drift over time
+- User instructions from early in conversation ignored
+- Impossible to distinguish summary drift from intentional changes
+
+**Warning signs:**
+- Agent behavior changes over long conversations
+- Early user instructions no longer reflected in agent responses
+- Growing disconnect between filesystem archive and in-context summary
+
+**Prevention:**
+1. **Incremental merging**: Update summaries rather than regenerate.
+2. **Anchor critical facts**: Preserve exact quotes for important instructions.
+3. **Version summaries**: Track summary lineage for debugging.
+4. **Periodic validation**: Compare summary against full history.
+
+**Phase to address:** Compaction policy phase. Critical for long-running agent scenarios.
+
+**Sources:**
+- [Factory.ai: Evaluating Context Compression for AI Agents](https://factory.ai/news/evaluating-compression)
+- [LangChain: Context Management for Deep Agents](https://blog.langchain.com/context-management-for-deepagents/)
+
+---
+
+## Minor Pitfalls
+
+Mistakes that cause annoyance but are fixable without major rework.
+
+---
+
+### Pitfall 22: Fork Depth Explosion
+
+**What goes wrong:** Unlimited forking creates deeply nested trees that become impossible to navigate or reason about. Users lose track of which branch contains which experiments.
+
+**Why it happens:** Git-like branching patterns applied to conversations create same problems as git branch explosion: "When you're three branches deep into different ideas, it becomes hard to remember how you got there."
+
+**Consequences:**
+- Confusing navigation for users
+- Performance degradation on deep ancestor queries
+- Storage growth from abandoned branches
+- No clear "main" lineage
+
+**Prevention:**
+1. **Limit fork depth** (configurable, default 3-5 levels).
+2. **Encourage pruning**: Auto-archive inactive branches.
+3. **Visualize lineage**: Provide tree view for navigation.
+4. **Support merge/rebase** for consolidating branches.
+
+**Phase to address:** Forking phase. UX decision, not critical for MVP.
+
+**Sources:**
+- [Martin Fowler: Patterns for Managing Source Code Branches](https://martinfowler.com/articles/branching-patterns.html)
+
+---
+
+### Pitfall 23: Compaction Timing During Active Conversation
+
+**What goes wrong:** Triggering compaction while user is actively conversing creates jarring experience as context shifts mid-conversation.
+
+**Why it happens:** Threshold-based compaction doesn't account for conversation state. Reaching 80% capacity triggers compaction regardless of whether user is mid-thought.
+
+**Consequences:**
+- Agent loses track of in-progress reasoning
+- User confusion when agent "forgets" recent context
+- Potential for lost partial tool outputs
+
+**Prevention:**
+1. **Debounce compaction**: Wait for conversation pause.
+2. **Never compact mid-tool-execution**: Track tool call open/close.
+3. **Warn before compacting**: Give agent/user heads-up.
+4. **Async background compaction** with snapshot isolation.
+
+**Phase to address:** Compaction policy phase. UX polish.
+
+**Sources:**
+- [Google ADK: Context Compaction](https://google.github.io/adk-docs/context/compaction/)
+
+---
+
+### Pitfall 24: Inconsistent Deletion Semantics Across Layers
+
+**What goes wrong:** Messages use `CASCADE` delete on context deletion, but contexts use soft-delete. This means soft-deleting a context leaves all messages intact (correct), but hard-deleting a context removes all messages permanently (may violate audit requirements).
+
+**Why it happens:** Current schema design: contexts have `deletedAt` (soft), messages reference contexts with `onDelete: "cascade"` (hard). The cascade only triggers on actual DELETE, not soft-delete, so current behavior is correct. But if anyone ever hard-deletes a context, messages disappear.
+
+**Consequences:**
+- Accidental hard delete permanently destroys conversation history
+- No path to recover messages if context is hard-deleted
+- Inconsistent mental model for operators
+
+**Prevention:**
+1. **Never expose hard delete** in repository API.
+2. **Add soft-delete to messages** for explicit message removal.
+3. **Implement retention policy** for periodic hard-delete cleanup with clear warnings.
+4. **Archive messages before context hard-delete** if audit requirements exist.
+
+**Detection in existing system:**
+`ContextRepository` only implements `softDelete()`, not hard delete. Safe as long as no one adds hard delete capability.
+
+**Phase to address:** Data retention phase. Document deletion semantics clearly.
+
+**Sources:**
+- [Blog.bemi.io: The Day Soft Deletes Caused Chaos](https://blog.bemi.io/soft-deleting-chaos/)
+
+---
+
+## Phase-Specific Warnings: Policy Engine
+
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|---------------|------------|
+| Compaction policies | Artifact/metadata loss (#13) | Build artifact index before summarization |
+| Compaction policies | Cumulative drift (#21) | Incremental merge, version summaries |
+| Compaction policies | Wrong timing (#23) | Debounce, pause detection |
+| Compaction policies | Loop guards (#18) | Track compaction-in-progress state |
+| Forking | Parent deletion orphans (#14) | Copy-on-write or preserve deleted parents |
+| Forking | Version conflicts (#15) | Immutable version identity |
+| Forking | Depth explosion (#22) | Depth limits, visualization |
+| Time-travel | Inconsistent snapshots (#17) | Transaction timestamps, version-based queries |
+| Time-travel | Soft-delete interaction (#24) | Clarify deletion semantics |
+| Cross-cutting | Token count drift (#16) | Store tokenizer info, conservative budgets |
+| Cross-cutting | Unique constraints (#19) | Partial indexes for soft-delete columns |
+
+---
+
+## Integration Warnings for Existing System
+
+The current Kata Context system has specific integration points to watch:
+
+1. **`append()` with FOR UPDATE lock**: Compaction must respect this lock or risk version conflicts.
+
+2. **`getByTokenBudget()` traverses all messages**: Compaction should reduce this set, but version gaps must not break pagination.
+
+3. **`forkVersion` on contexts**: Compaction must not remove the message at `forkVersion` or fork reconstruction breaks.
+
+4. **Cascade delete on messages**: Any hard-delete of contexts bypasses soft-delete semantics for messages.
+
+5. **`totalTokens` counter on context**: Compaction that removes messages must update this counter atomically.
+
+---
+
+## Quick Reference Checklist: Policy Engine Features
+
+Before implementing compaction:
+
+- [ ] Artifact index designed (files, tool calls, version refs survive compaction)
+- [ ] Version semantics locked (never renumber, use gaps)
+- [ ] Loop guards in place (compaction-in-progress tracking)
+- [ ] Token budget accounts for tokenizer variance
+- [ ] Summary positioning tested (not lost-in-the-middle)
+- [ ] Incremental merge strategy chosen (not regenerate from scratch)
+- [ ] Compaction timing debounced (not mid-conversation)
+
+Before implementing forking:
+
+- [ ] Copy-on-write vs reference semantics decided
+- [ ] Parent deletion handling specified (`forkSourceDeleted` or copy messages)
+- [ ] Fork depth limits set
+- [ ] Orphan detection query ready
+
+Before implementing time-travel:
+
+- [ ] Timestamp vs version-based queries chosen
+- [ ] Batch insert consistency verified (same `createdAt` within transaction)
+- [ ] Soft-delete visibility in time-travel specified
+- [ ] Fork boundary behavior documented
+
+---
+
+## Sources Summary: Policy Engine
+
+**Context Compression:**
+- [Factory.ai: Evaluating Context Compression for AI Agents](https://factory.ai/news/evaluating-compression)
+- [Google ADK: Context Compaction](https://google.github.io/adk-docs/context/compaction/)
+- [LangChain: Context Management for Deep Agents](https://blog.langchain.com/context-management-for-deepagents/)
+- [Chroma Research: Context Rot](https://research.trychroma.com/context-rot)
+
+**Database Temporal/Versioning:**
+- [Hypirion: Implementing System-Versioned Tables in Postgres](https://hypirion.com/musings/implementing-system-versioned-tables-in-postgres)
+- [Microsoft: Temporal Tables in SQL Server](https://learn.microsoft.com/en-us/sql/relational-databases/tables/temporal-tables)
+
+**Soft Delete:**
+- [DEV Community: Why Soft Delete Can Backfire on Data Consistency](https://dev.to/mrakdon/why-soft-delete-can-backfire-on-data-consistency-4epl)
+- [Cultured Systems: Avoiding the Soft Delete Anti-Pattern](https://www.cultured.systems/2024/04/24/Soft-delete/)
+
+**Event Sourcing:**
+- [Chris Kiehl: Event Sourcing is Hard](https://chriskiehl.com/article/event-sourcing-is-hard)
+- [Kite Metric: Event Sourcing Fails - 5 Real-World Lessons](https://kitemetric.com/blogs/event-sourcing-fails-5-real-world-lessons)
+
+**Forking/Branching:**
+- [LibreChat: Forking Messages and Conversations](https://www.librechat.ai/docs/features/fork)
+- [Martin Fowler: Patterns for Managing Source Code Branches](https://martinfowler.com/articles/branching-patterns.html)

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { setupTestDb, teardownTestDb, testDb } from "../../vitest.setup.js";
 import { contexts } from "../db/schema/index.js";
+import { resolvePolicy } from "../validation/policy.js";
 import { ContextRepository } from "./context.repository.js";
 
 describe("ContextRepository", () => {
@@ -87,6 +88,38 @@ describe("ContextRepository", () => {
 
       const secondDelete = await repository.softDelete(ctx.id);
       expect(secondDelete).toBeNull();
+    });
+  });
+
+  describe("policyConfig", () => {
+    it("persists policyConfig on create and returns it on findById", async () => {
+      const ctx = await repository.create({
+        name: "With Policy",
+        policyConfig: { threshold: 0.6, preserveRecentCount: 5, enabled: false },
+      });
+      const found = await repository.findById(ctx.id);
+      expect(found?.policyConfig).toEqual({
+        threshold: 0.6,
+        preserveRecentCount: 5,
+        enabled: false,
+      });
+    });
+
+    it("returns null policyConfig when created without one", async () => {
+      const ctx = await repository.create({ name: "No Policy" });
+      const found = await repository.findById(ctx.id);
+      expect(found?.policyConfig).toBeNull();
+    });
+
+    it("stores resolved partial policy as full config", async () => {
+      const policy = resolvePolicy({ threshold: 0.5 });
+      const ctx = await repository.create({ name: "Partial", policyConfig: policy });
+      const found = await repository.findById(ctx.id);
+      expect(found?.policyConfig).toEqual({
+        threshold: 0.5,
+        preserveRecentCount: 10,
+        enabled: true,
+      });
     });
   });
 

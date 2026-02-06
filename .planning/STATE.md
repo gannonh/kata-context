@@ -2,17 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-04)
+See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Policy-based context window management for AI agents
-**Current focus:** Planning next milestone
+**Current focus:** v0.3.0 Policy Engine
 
 ## Current Position
 
-Phase: v0.2.0 complete
-Plan: N/A
-Status: Ready for next milestone
-Last activity: 2026-02-04 -- v0.2.0 milestone complete
+Phase: 6 - Infrastructure + Policy Foundation
+Plan: 2 of 2
+Status: Phase complete
+Last activity: 2026-02-06 - Completed 06-02-PLAN.md
+
+Progress: [##########] Phase 6 Plan 2/2
 
 ## Progress
 
@@ -25,7 +27,21 @@ v0.2.0 Database + Storage Layer - SHIPPED
 [##########] Phase 3: Database Foundation (2/2 plans) - COMPLETE
 [##########] Phase 4: Repository Layer (2/2 plans) - COMPLETE
 [##########] Phase 5: API + Testing Layer (4/4 plans) - COMPLETE
+
+v0.3.0 Policy Engine - IN PROGRESS
+[##########] Phase 6: Infrastructure + Policy Foundation (2/2 plans) - COMPLETE
+[          ] Phase 7: Forking + Time-Travel (0/? plans) - PENDING
+[          ] Phase 8: Compaction Core (0/? plans) - PENDING
+[          ] Phase 9: API Layer (0/? plans) - PENDING
 ```
+
+## Performance Metrics
+
+| Milestone | Duration | Phases | Plans | Reqs |
+|-----------|----------|--------|-------|------|
+| v0.1.0 | 1 day | 2 | 4 | 8 |
+| v0.2.0 | 6 days | 3 | 8 | 23 |
+| v0.3.0 | In progress | 4 | TBD | 26 |
 
 ## Accumulated Context
 
@@ -33,22 +49,44 @@ v0.2.0 Database + Storage Layer - SHIPPED
 
 See PROJECT.md Key Decisions table for cumulative record.
 
+**v0.3.0 specific:**
+- gpt-tokenizer for token counting (fastest, smallest bundle)
+- JSONB column for policy storage (no separate table)
+- Copy-on-write for forking (simple queries, trade storage for speed)
+- Version-based time-travel (not timestamp-based)
+- Synchronous compaction via API call (async deferred)
+- PolicyConfig type sourced from Zod schema (single source of truth), imported by Drizzle schema via `.$type<>()`
+- Application-layer defaults via Zod `.default()`, not SQL DEFAULT (enables partial object merging)
+- All new columns nullable (NULL = use system defaults / not compacted)
+- Repository stores policyConfig as-is; defaults resolved at application layer via resolvePolicy()
+- API schema reuses policyConfigSchema from validation module (single source of truth)
+
 ### Blockers
 
 (None)
 
 ### TODOs
 
-(None -- milestone complete)
+- [x] Plan Phase 6
+- [x] Execute Phase 6 (Plan 01 + Plan 02 complete)
+- [ ] Plan Phase 7
+- [ ] Execute Phase 7
+- [ ] Plan Phase 8
+- [ ] Execute Phase 8
+- [ ] Plan Phase 9
+- [ ] Execute Phase 9
 
 ### Notes
 
-- v0.1.0 shipped with full developer workflow and CI infrastructure
-- v0.2.0 shipped with storage foundation, repository layer, and REST API
-- Stack: pnpm 10.x, Node.js 24.x, TypeScript 5.9.x, Biome 2.3.x, Vitest 4.x, Zod 4.x, Drizzle ORM 0.45.1, pg 8.14.1
+- Research complete with HIGH confidence across all areas
+- Existing schema supports forking (parentId, forkVersion) and time-travel (version)
+- Critical pitfall: never renumber versions during compaction
+- Critical pitfall: copy-on-write for forks to survive parent deletion
+- Migration 0002_sturdy_post.sql adds 3 columns (policy_config, compacted_at, compacted_into_version)
+- Phase 6 complete: 162 tests, 100% coverage, all INFRA and POLICY requirements satisfied
 
 ## Session Continuity
 
-Last session: 2026-02-04
-Stopped at: v0.2.0 milestone complete
-Resume with: `/kata:kata-add-milestone` for v0.3.0
+Last session: 2026-02-06
+Stopped at: Phase 6 complete, verified (10/10 must-haves)
+Resume with: `/kata:kata-discuss-phase 7` to prepare Forking + Time-Travel

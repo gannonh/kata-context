@@ -1,246 +1,247 @@
-# Technology Stack: v0.2.0 Database + Storage Layer
+# Technology Stack: v0.3.0 Policy Engine
 
 **Project:** Kata Context
-**Researched:** 2026-01-29
+**Researched:** 2026-02-05
 **Overall Confidence:** HIGH
 
 ## Executive Summary
 
-For PostgreSQL storage with pgvector in a Vercel serverless environment, use **Drizzle ORM** with **Neon direct** (not Vercel Postgres). Vercel Postgres was deprecated in Q4 2024 and transitioned to Neon's native integration. With Vercel Fluid compute (default since April 2025), use WebSocket connections via `@neondatabase/serverless` with connection pooling.
+The v0.3.0 policy engine builds on the existing v0.2.0 foundation without requiring new infrastructure dependencies. The three target features (compaction, forking, time-travel) can be implemented using the current stack. One new library is recommended: **gpt-tokenizer** for accurate token counting during compaction decisions.
 
-## Existing Stack (from v0.1.0)
-
-Already validated and in production:
-- Node.js 24.x
-- TypeScript 5.9.x with strict mode, NodeNext resolution
-- pnpm 10.x
-- Biome 2.3.x
-- Vitest 4.x
-- Vercel Functions (Fluid compute)
-
-**Do not re-research these.** Focus below is exclusively on database layer additions.
+**Key finding:** The existing schema already supports forking (`parentId`, `forkVersion` on contexts) and time-travel (versioned messages). v0.3.0 is primarily application logic, not infrastructure expansion.
 
 ---
 
-## New Stack for v0.2.0
+## Existing Stack (Do Not Change)
 
-### Database Platform
+Already validated in v0.2.0 production:
 
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| Neon | managed | PostgreSQL hosting | Vercel Postgres is deprecated and now powered by Neon. Direct Neon is cheaper with identical performance. Native pgvector support. |
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| Node.js | 24.x | Runtime |
+| TypeScript | 5.9.x | Language |
+| pnpm | 10.x | Package manager |
+| Drizzle ORM | 0.45.1 | Database queries |
+| pg | 8.14.1 | PostgreSQL driver |
+| Neon PostgreSQL | managed | Database hosting with pgvector |
+| Zod | 4.3.6 | Schema validation |
+| Vitest | 4.x | Testing |
+| Biome | 2.3.x | Linting/formatting |
 
-**Why Neon over Vercel Postgres:**
-- Vercel transitioned all Vercel Postgres stores to Neon's native integration (Q4 2024 - Q1 2025)
-- Vercel Postgres was more expensive with no performance benefits
-- Direct Neon gives access to all Neon features (branching, autoscaling, etc.)
-- Same underlying infrastructure, fewer middlemen
+**Do not re-research or replace these.** Focus below is exclusively on additions for policy engine features.
 
-### ORM Layer
+---
 
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| drizzle-orm | 0.45.1 | Database queries | Lightweight (~7kb minified+gzipped), zero binary dependencies, negligible cold start impact. Type-safe SQL. Native pgvector support. |
-| drizzle-kit | 0.31.8 | Migrations | SQL-first migrations, generate + migrate workflow. Custom migrations for pgvector extension. |
+## New Dependencies for v0.3.0
 
-**Why Drizzle over Prisma:**
-- **Cold starts:** Drizzle is ~7kb vs Prisma's heavier footprint. In serverless, this matters.
-- **SQL transparency:** Drizzle generates predictable SQL. You see exactly what runs.
-- **pgvector support:** Native `vector` type in schema, built-in operators for similarity search.
-- **Bundle size:** Critical for serverless functions where every KB affects cold start latency.
-- **No binary engine:** Prisma's Rust query engine (though improved in 2026) still has more overhead.
-
-**Note:** Prisma improved significantly in 2026 (no longer uses Rust-based engine for serverless), but Drizzle remains the better choice for this use case due to its SQL-first approach and pgvector integration maturity.
-
-### Database Driver
+### Token Counting
 
 | Technology | Version | Purpose | Rationale |
 |------------|---------|---------|-----------|
-| @neondatabase/serverless | 1.0.2 | PostgreSQL connections | HTTP/WebSocket driver optimized for serverless. Drop-in `pg` replacement. TypeScript types built-in. |
+| gpt-tokenizer | 3.4.0 | Token counting | Fastest JS tokenizer. Pure JS (no WASM). Supports cl100k_base (GPT-4) and o200k_base (GPT-4o, GPT-5). Synchronous API. ~50KB bundle. |
 
-**Connection Strategy with Vercel Fluid:**
+**Why gpt-tokenizer over alternatives:**
 
-Vercel Fluid compute (default since April 2025) changes the calculus:
+| Library | Pros | Cons | Verdict |
+|---------|------|------|---------|
+| **gpt-tokenizer** | Fastest. Smallest. Sync API. Chat-aware `encodeChat()`. | OpenAI-focused encodings only | **Use this** |
+| js-tiktoken | Pure JS, official OpenAI port | Slower than gpt-tokenizer, no chat helper | Skip |
+| tiktoken (WASM) | Full parity with Python | Larger bundle, WASM complexity in serverless | Skip |
+| @anthropic-ai/tokenizer | Official Anthropic | Inaccurate for Claude 3+ (deprecated) | Skip |
 
-1. **With Fluid enabled:** Use WebSocket driver with connection pooling via `Pool`. TCP connections can be reused across invocations.
-2. **Classic serverless:** Use HTTP driver (`neon()`) for single queries - fastest for "first query" scenarios.
+**Note on Anthropic models:** The `@anthropic-ai/tokenizer` package is inaccurate for Claude 3+ models. For Claude token counting, use the `@anthropic-ai/sdk` method `messages.countTokens()` which calls the API. Since Kata Context is model-agnostic, use gpt-tokenizer as a reasonable approximation for all models. Exact counts can be refined per-provider when the SDK integration layer is built.
 
-**Recommendation:** Use WebSocket driver with Pool since Fluid is the default. This provides:
-- Session support for transactions
-- Connection reuse across invocations
-- Lower latency after first connection
-- Full `pg` API compatibility
+**Installation:**
 
-### pgvector Extension
+```bash
+pnpm add gpt-tokenizer@3.4.0
+```
 
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| pgvector | Neon-managed | Vector similarity search | Native Neon support. Up to 2,000 dimensions for standard vectors. HNSW and IVFFlat indexes. |
+**Usage pattern:**
 
-**Neon pgvector specifics:**
-- Pre-installed, just needs `CREATE EXTENSION vector;`
-- Standard `vector`: up to 2,000 dimensions
-- `halfvec` (half-precision): up to 4,000 dimensions
-- HNSW index recommended for query performance (slower builds but faster queries)
+```typescript
+import { encode, isWithinTokenLimit, encodeChat } from 'gpt-tokenizer';
 
-### Development Dependencies
+// Simple text tokenization
+const tokens = encode(message.content);
+const tokenCount = tokens.length;
 
-| Technology | Version | Purpose | Rationale |
-|------------|---------|---------|-----------|
-| dotenv | 17.2.3 | Environment variables | Load DATABASE_URL and other config. Standard approach. |
-| ws | 8.19.0 | WebSocket polyfill | Required for Node.js environments (Neon serverless uses WebSockets). |
-| @types/pg | 8.16.0 | TypeScript types | Type definitions for pg compatibility layer. |
+// Check budget without full encoding (faster)
+const fitsInBudget = isWithinTokenLimit(text, budget);
+
+// Chat message tokenization (accounts for role tokens)
+const chatTokens = encodeChat([
+  { role: 'user', content: 'Hello' },
+  { role: 'assistant', content: 'Hi there!' }
+]);
+```
+
+---
+
+## Schema Additions (No New Tables)
+
+The existing schema already supports the v0.3.0 features. No new tables required.
+
+### Existing Support for Forking
+
+**contexts table** (already has):
+```typescript
+parentId: uuid("parent_id").references(() => contexts.id)
+forkVersion: bigint("fork_version", { mode: "number" })
+```
+
+Forking creates a new context with `parentId` pointing to the source and `forkVersion` indicating the version point of divergence. Messages up to `forkVersion` are shared by reference (not copied).
+
+### Existing Support for Time-Travel
+
+**messages table** (already has):
+```typescript
+version: bigint("version", { mode: "number" }).notNull()
+deletedAt: timestamp("deleted_at", { withTimezone: true })
+```
+
+Time-travel reconstructs state by selecting messages where `version <= targetVersion` and `deletedAt IS NULL`. No schema changes needed.
+
+### Policy Configuration Storage
+
+Compaction policies need storage. Two options:
+
+**Option A: JSONB column on contexts (Recommended)**
+
+```typescript
+// Add to contexts schema
+policyConfig: jsonb("policy_config").$type<PolicyConfig>()
+```
+
+```typescript
+interface PolicyConfig {
+  compaction?: {
+    strategy: 'none' | 'sliding_window' | 'token_budget' | 'age_based';
+    maxMessages?: number;    // sliding_window: keep last N messages
+    tokenBudget?: number;    // token_budget: max tokens to retain
+    maxAgeDays?: number;     // age_based: delete messages older than N days
+    preserveRoles?: ('system' | 'user' | 'assistant' | 'tool')[];  // never compact these
+  };
+}
+```
+
+**Option B: Separate policies table**
+
+Overkill for v0.3.0. Policy configuration belongs with the context it governs. A separate table adds join overhead with no benefit at this stage.
+
+**Recommendation:** Option A. Add `policyConfig` JSONB column to contexts. Validated at application layer with Zod. Can migrate to separate table later if policy complexity grows.
 
 ---
 
 ## What NOT to Add
 
-| Technology | Reason |
-|------------|--------|
-| **Vercel Postgres SDK** | Deprecated. Vercel transitioned to Neon native integration. Use `@neondatabase/serverless` directly. |
-| **Prisma** | Heavier, more cold start impact, less SQL control. Drizzle is better fit for serverless + pgvector. |
-| **node-postgres (pg)** | Use `@neondatabase/serverless` instead - same API but optimized for serverless. It's a drop-in replacement. |
-| **TypeORM** | Legacy patterns, poor TypeScript inference, slower development velocity. |
-| **Kysely** | Good query builder, but Drizzle provides similar benefits plus schema management and migrations. |
-| **Connection pool libraries (pgBouncer, etc.)** | Neon handles connection pooling server-side. Client-side pooling via `Pool` class is sufficient. |
+| Technology | Why Not |
+|------------|---------|
+| **Redis / BullMQ** | No background job processing needed for v0.3.0. Compaction is triggered on write, not scheduled. If scheduled compaction needed later, evaluate then. |
+| **node-cron** | Same as above. No scheduled jobs in v0.3.0. |
+| **tiktoken (WASM)** | Larger bundle, WASM complexity. gpt-tokenizer is faster and smaller. |
+| **@anthropic-ai/tokenizer** | Inaccurate for Claude 3+. Use SDK `countTokens()` when Anthropic-specific accuracy needed. |
+| **Separate policies table** | Premature abstraction. JSONB on contexts is sufficient for MVP. |
+| **Event sourcing library** | Messages table is already append-only and versioned. No library needed. |
+| **Copy-on-write database extension** | Fork by reference works with existing schema. No Neon branching needed at application level. |
+| **LLM SDK (OpenAI, Anthropic)** | Summarization deferred to post-v0.3.0. When needed, will be injected, not bundled. |
 
 ---
 
-## Installation
+## Feature Implementation Strategy
 
-```bash
-# Production dependencies
-pnpm add drizzle-orm @neondatabase/serverless dotenv
+### Compaction Policies
 
-# Development dependencies
-pnpm add -D drizzle-kit ws @types/pg
+**Implementation:** Application logic in new `PolicyService`.
+
+**No new dependencies.** Uses:
+- gpt-tokenizer for token counting
+- Existing MessageRepository for queries/deletes
+- Zod for policy schema validation
+
+**Compaction triggers:**
+1. **On append:** After `MessageRepository.append()`, check if policy threshold exceeded
+2. **On read:** Never compact on read (side-effect-free retrieval)
+3. **Manual:** API endpoint to trigger compaction
+
+**Compaction is soft-delete.** Sets `deletedAt` on messages, preserving history for time-travel.
+
+### Context Forking
+
+**Implementation:** Application logic in `ContextRepository.fork()`.
+
+**No new dependencies.** Uses:
+- Existing `parentId` and `forkVersion` columns
+- Copy-on-write semantics: forked context shares message history by reference
+
+**Fork operation:**
+1. Create new context with `parentId = sourceContextId` and `forkVersion = sourceLatestVersion`
+2. Copy `policyConfig` from source (or allow override)
+3. New messages append to forked context only
+4. Source context unaffected
+
+**Message visibility in fork:**
+```sql
+-- Messages visible in forked context
+SELECT * FROM messages
+WHERE (context_id = :forkId AND version > :forkVersion)
+   OR (context_id = :parentId AND version <= :forkVersion AND deleted_at IS NULL)
+ORDER BY version ASC;
 ```
 
----
+### Time-Travel
 
-## Configuration Files
+**Implementation:** Application logic in `MessageRepository.getAtVersion()`.
 
-### drizzle.config.ts
+**No new dependencies.** Uses existing versioned messages.
 
+**Query pattern:**
 ```typescript
-import 'dotenv/config';
-import { defineConfig } from 'drizzle-kit';
-
-export default defineConfig({
-  schema: './src/db/schema.ts',
-  out: './drizzle',
-  dialect: 'postgresql',
-  dbCredentials: {
-    url: process.env.DATABASE_URL!,
-  },
-});
-```
-
-### vercel.json (Fluid compute explicit)
-
-```json
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "fluid": true
+async getAtVersion(contextId: string, targetVersion: number): Promise<Message[]> {
+  return this.db
+    .select()
+    .from(messages)
+    .where(and(
+      eq(messages.contextId, contextId),
+      lte(messages.version, targetVersion),
+      notDeleted(messages)
+    ))
+    .orderBy(asc(messages.version));
 }
 ```
 
-Note: Fluid compute is default for new projects since April 2025, but explicit configuration documents intent.
-
-### Database Connection (src/db/index.ts)
-
-```typescript
-import { neonConfig, Pool } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from 'ws';
-import * as schema from './schema';
-
-// Required for Node.js environments (local dev, tests)
-neonConfig.webSocketConstructor = ws;
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-export const db = drizzle(pool, { schema });
-```
-
-### Schema with pgvector (src/db/schema.ts)
-
-```typescript
-import { index, pgTable, serial, text, timestamp, uuid, vector } from 'drizzle-orm/pg-core';
-
-export const contexts = pgTable(
-  'contexts',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    content: text('content').notNull(),
-    embedding: vector('embedding', { dimensions: 1536 }),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  },
-  (table) => [
-    index('contexts_embedding_idx').using('hnsw', table.embedding.op('vector_cosine_ops')),
-  ]
-);
-```
+**For forked contexts:** Walk parent chain to reconstruct full history at any version.
 
 ---
 
-## Migration Workflow
+## Installation Summary
+
+### Production Dependencies (New)
 
 ```bash
-# Generate migration from schema changes
-pnpm drizzle-kit generate
-
-# Apply migrations to database
-pnpm drizzle-kit migrate
-
-# For pgvector extension (one-time, manual migration):
-pnpm drizzle-kit generate --custom
-# Then add to the generated SQL: CREATE EXTENSION IF NOT EXISTS vector;
+pnpm add gpt-tokenizer@3.4.0
 ```
 
-**Important:** Drizzle does not auto-create extensions. The pgvector extension must be enabled via a custom migration before any vector columns are used.
+### No Dev Dependencies Needed
+
+Existing tooling sufficient.
 
 ---
 
-## Environment Variables
+## Migration Plan
 
-```bash
-# .env.local (development)
-DATABASE_URL=postgresql://[user]:[password]@[neon-hostname]/[dbname]?sslmode=require
+### Database Migration (One)
 
-# Vercel (production)
-# Set via Vercel dashboard or Neon integration
-# The Neon Vercel integration auto-populates these
+```sql
+-- Add policy configuration column to contexts
+ALTER TABLE contexts
+ADD COLUMN policy_config JSONB;
+
+-- Optional: Add partial index for contexts with compaction enabled
+CREATE INDEX contexts_has_compaction_idx
+ON contexts ((policy_config->>'compaction'))
+WHERE policy_config->>'compaction' IS NOT NULL;
 ```
-
----
-
-## Scripts to Add (package.json)
-
-```json
-{
-  "scripts": {
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
-  }
-}
-```
-
----
-
-## Alternatives Considered
-
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| ORM | Drizzle | Prisma | Heavier bundle, more cold start latency, less SQL control |
-| ORM | Drizzle | Kysely | No built-in migrations, schema-query disconnect |
-| Database | Neon (direct) | Vercel Postgres | Deprecated, more expensive, same underlying infrastructure |
-| Database | Neon | Supabase | Supabase is great but Neon has better Vercel integration and serverless driver |
-| Driver | @neondatabase/serverless | node-postgres | Neon driver is optimized for serverless, same API |
-| Vector | pgvector | Pinecone/Weaviate | External service adds latency, cost, complexity. pgvector keeps vectors with data. |
 
 ---
 
@@ -248,30 +249,60 @@ DATABASE_URL=postgresql://[user]:[password]@[neon-hostname]/[dbname]?sslmode=req
 
 | Decision | Confidence | Source |
 |----------|------------|--------|
-| Neon over Vercel Postgres | HIGH | [Vercel Postgres Transition Guide](https://neon.com/docs/guides/vercel-postgres-transition-guide), official Vercel deprecation |
-| Drizzle over Prisma | HIGH | [Multiple](https://medium.com/@thebelcoder/prisma-vs-drizzle-orm-in-2026-what-you-really-need-to-know-9598cf4eaa7c) [sources](https://www.thisdot.co/blog/drizzle-orm-a-performant-and-type-safe-alternative-to-prisma), benchmarks, serverless recommendations |
-| @neondatabase/serverless driver | HIGH | [Neon official docs](https://neon.com/docs/serverless/serverless-driver), [Drizzle Neon integration](https://orm.drizzle.team/docs/connect-neon) |
-| WebSocket + Pool for Fluid | HIGH | [Vercel Fluid docs](https://vercel.com/docs/fluid-compute), [Neon connection methods](https://neon.com/docs/guides/vercel-connection-methods) |
-| pgvector on Neon | HIGH | [Neon pgvector docs](https://neon.com/docs/extensions/pgvector), [Drizzle pgvector guide](https://orm.drizzle.team/docs/guides/vector-similarity-search) |
-| Package versions | HIGH | npm registry (verified 2026-01-29) |
+| gpt-tokenizer over alternatives | HIGH | [GitHub README](https://github.com/niieani/gpt-tokenizer), [npm registry](https://www.npmjs.com/package/gpt-tokenizer), benchmarks |
+| No Redis/BullMQ for v0.3.0 | HIGH | Scope analysis: compaction is synchronous on write, not scheduled |
+| JSONB policy column | HIGH | Standard PostgreSQL pattern for flexible config. Zod validates at app layer. |
+| Fork-by-reference pattern | HIGH | Existing schema supports it. [LibreChat](https://www.librechat.ai/docs/features/fork), [OpenAI community patterns](https://community.openai.com/t/chatgpt-conversational-fork-copy-on-write/1232643) |
+| Time-travel via versioned messages | HIGH | [Event sourcing patterns](https://medium.com/@sudipto76/time-travel-using-event-sourcing-pattern-603a0551d2ff), existing schema |
+| Package version | HIGH | npm registry (verified 2026-02-05) |
+
+---
+
+## Alternatives Considered
+
+| Decision | Recommended | Alternative | Why Not |
+|----------|-------------|-------------|---------|
+| Token counting | gpt-tokenizer | tiktoken WASM | Larger bundle, WASM complexity |
+| Token counting | gpt-tokenizer | js-tiktoken | Slower, no chat helper |
+| Policy storage | JSONB column | Separate table | Premature abstraction |
+| Scheduled compaction | None | BullMQ | Not needed for v0.3.0 scope |
+| Fork implementation | Reference sharing | Full message copy | Wastes storage, slow |
+
+---
+
+## Open Questions for Implementation
+
+1. **Multi-level fork chains:** Should `getAtVersion()` recursively walk parent chain? Or denormalize at fork time?
+   - Recommendation: Walk parent chain. Keeps fork fast, trades read complexity.
+
+2. **Compaction and forks:** If parent context compacts messages, what happens to forks referencing those versions?
+   - Recommendation: Forks preserve access to soft-deleted messages in parent. Add `includeDeletedFromParent` flag to fork queries.
+
+3. **Token counting model:** gpt-tokenizer defaults to o200k_base (GPT-4o). Should callers specify encoding?
+   - Recommendation: Default to o200k_base. Allow override via `policyConfig.tokenEncoding`.
 
 ---
 
 ## Sources
 
-### Official Documentation
-- [Neon Serverless Driver](https://neon.com/docs/serverless/serverless-driver) - Connection setup, Pool vs Client
-- [Neon pgvector Extension](https://neon.com/docs/extensions/pgvector) - Vector types, indexing, limits
-- [Neon Vercel Connection Methods](https://neon.com/docs/guides/vercel-connection-methods) - Fluid vs classic serverless
-- [Vercel Fluid Compute](https://vercel.com/docs/fluid-compute) - Configuration, benefits, pricing
-- [Drizzle + Neon](https://orm.drizzle.team/docs/connect-neon) - Driver setup, HTTP vs WebSocket
-- [Drizzle pgvector Guide](https://orm.drizzle.team/docs/guides/vector-similarity-search) - Schema, queries, indexes
-- [Drizzle Migrations](https://orm.drizzle.team/docs/migrations) - generate, migrate, custom migrations
+### HIGH Confidence (Official/Verified)
 
-### Comparison Analysis
-- [Prisma vs Drizzle ORM in 2026](https://medium.com/@thebelcoder/prisma-vs-drizzle-orm-in-2026-what-you-really-need-to-know-9598cf4eaa7c)
-- [Drizzle: A performant and type-safe alternative to Prisma](https://www.thisdot.co/blog/drizzle-orm-a-performant-and-type-safe-alternative-to-prisma)
-- [Node.js ORMs in 2025](https://thedataguy.pro/blog/2025/12/nodejs-orm-comparison-2025/)
+- [gpt-tokenizer GitHub](https://github.com/niieani/gpt-tokenizer) - Features, API, performance claims
+- [npm registry](https://www.npmjs.com/) - Version verification (gpt-tokenizer@3.4.0)
+- [Token Counting Guide 2025](https://www.propelcode.ai/blog/token-counting-tiktoken-anthropic-gemini-guide-2025) - Library comparison
 
-### Version Verification
-- npm registry (queried 2026-01-29): drizzle-orm@0.45.1, drizzle-kit@0.31.8, @neondatabase/serverless@1.0.2, dotenv@17.2.3, ws@8.19.0, @types/pg@8.16.0
+### MEDIUM Confidence (Community Patterns)
+
+- [LibreChat Forking](https://www.librechat.ai/docs/features/fork) - Fork implementation patterns
+- [Event Sourcing Time Travel](https://medium.com/@sudipto76/time-travel-using-event-sourcing-pattern-603a0551d2ff) - Version reconstruction patterns
+- [Context Window Management](https://blog.jetbrains.com/research/2025/12/efficient-context-management/) - Compaction strategies
+
+### Existing Codebase (Verified)
+
+- `/Users/gannonhall/dev/kata/kata-context/src/db/schema/contexts.ts` - parentId, forkVersion columns
+- `/Users/gannonhall/dev/kata/kata-context/src/db/schema/messages.ts` - version column, soft delete
+- `/Users/gannonhall/dev/kata/kata-context/src/repositories/message.repository.ts` - getByTokenBudget pattern
+
+---
+
+*Last updated: 2026-02-05*

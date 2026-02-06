@@ -2,11 +2,13 @@ import {
   type AnyPgColumn,
   bigint,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { PolicyConfig } from "../../validation/policy.js";
 
 export const contexts = pgTable("contexts", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -22,6 +24,7 @@ export const contexts = pgTable("contexts", {
     onDelete: "set null",
   }),
   forkVersion: bigint("fork_version", { mode: "number" }),
+  policyConfig: jsonb("policy_config").$type<PolicyConfig>(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 

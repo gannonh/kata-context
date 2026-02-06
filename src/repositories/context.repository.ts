@@ -16,6 +16,7 @@ export class ContextRepository {
         .insert(contexts)
         .values({
           name: input.name ?? null,
+          policyConfig: input.policyConfig ?? null,
         })
         .returning();
 

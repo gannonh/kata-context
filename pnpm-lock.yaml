@@ -14,6 +14,9 @@ importers:
       drizzle-orm:
         specifier: 0.45.1
         version: 0.45.1(@electric-sql/pglite@0.3.15)(@types/pg@8.15.2)(pg@8.14.1)
+      gpt-tokenizer:
+        specifier: ^3.4.0
+        version: 3.4.0
       pg:
         specifier: 8.14.1
         version: 8.14.1
@@ -1007,6 +1010,9 @@ packages:
 
   get-tsconfig@4.13.1:
     resolution: {integrity: sha512-EoY1N2xCn44xU6750Sx7OjOIT59FkmstNc3X6y5xpz7D5cBtZRe/3pSlTkDJgqsOk3WwZPkWfonhhUJfttQo3w==}
+
+  gpt-tokenizer@3.4.0:
+    resolution: {integrity: sha512-wxFLnhIXTDjYebd9A9pGl3e31ZpSypbpIJSOswbgop5jLte/AsZVDvjlbEuVFlsqZixVKqbcoNmRlFDf6pz/UQ==}
 
   has-flag@4.0.0:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
@@ -2023,6 +2029,8 @@ snapshots:
   get-tsconfig@4.13.1:
     dependencies:
       resolve-pkg-maps: 1.0.0
+
+  gpt-tokenizer@3.4.0: {}
 
   has-flag@4.0.0: {}
 

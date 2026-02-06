@@ -32,6 +32,8 @@ export const messages = pgTable(
     tokenCount: integer("token_count"),
     model: text("model"),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    compactedAt: timestamp("compacted_at", { withTimezone: true }),
+    compactedIntoVersion: bigint("compacted_into_version", { mode: "number" }),
     // pgvector column for semantic search (v0.3.0+)
     // 1536 dimensions = OpenAI text-embedding-3-small
     embedding: vector("embedding", { dimensions: 1536 }),

@@ -1,395 +1,322 @@
-# Feature Landscape: Context Storage Layer
+# Feature Landscape: Context Policy Engine
 
-**Domain:** AI Agent Context Storage and Management
-**Researched:** 2026-01-29
-**Focus:** v0.2.0 Database + Storage Layer milestone
+**Domain:** AI agent context management (compaction, forking, time-travel)
+**Researched:** 2026-02-05
+**Previous Research:** 2026-01-29 (v0.2.0 Storage Layer)
+**Focus:** Policy engine features built on existing storage layer
 **Overall Confidence:** HIGH
 
 ## Executive Summary
 
-A context storage layer for AI agents must solve the fundamental problem: given potentially unlimited conversation history, efficiently store, version, and retrieve the optimal subset for each model call. This is not a generic database problem - it requires purpose-built abstractions for versioned message storage, efficient windowing, and preparation for semantic retrieval.
+The context policy engine extends Kata Context's existing storage layer (contexts, messages with versioning, token-budgeted windowing) with intelligent context management. The core value proposition: "Given messages and a context budget, determine the optimal window to send to the model while preserving critical information."
 
-Based on research into LangGraph memory patterns, event sourcing for conversation history, and pgvector best practices, I recommend a **tiered storage model** with **event-sourced conversation logs**, **snapshot-based retrieval optimization**, and **cursor-based pagination** for windowing operations.
+Research into Claude Platform, LangGraph, Google ADK, and Factory.ai reveals mature patterns for compaction, forking, and time-travel. The schema already supports forking (`parentId`, `forkVersion`) and versioning (`version` column). Policy engine adds the decision layer on top.
 
 ---
 
-## Table Stakes
+## Existing Foundation (v0.2.0 Complete)
 
-Features users expect. Missing = storage layer feels incomplete or unusable for AI agent applications.
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Message persistence with versioning | Built | `version` column, unique per context |
+| Token-budget windowing | Built | `getByTokenBudget()` returns messages fitting budget |
+| Cursor-based pagination | Built | Version-based cursor, efficient retrieval |
+| Soft delete | Built | `deletedAt` timestamp |
+| Fork schema support | Built | `parentId`, `forkVersion` columns exist |
+| Context CRUD | Built | Create, read, soft-delete operations |
 
-| Feature | Why Expected | Complexity | v0.2.0 Scope | Notes |
-|---------|-------------|------------|--------------|-------|
-| **Message persistence** | Core requirement - agents need conversation history | Low | **Yes** | Store user messages, assistant responses, tool calls, tool results |
-| **Session/conversation isolation** | Multiple conversations must not leak into each other | Low | **Yes** | Session-scoped storage with unique identifiers |
-| **Message ordering** | Conversation flow requires strict ordering | Low | **Yes** | Timestamp + sequence number for consistent ordering |
-| **Metadata storage** | Token counts, model info, timestamps essential for windowing | Low | **Yes** | Structured metadata alongside message content |
-| **Basic CRUD operations** | Create, read, update, delete contexts and messages | Low | **Yes** | REST API for context management |
-| **Serverless-optimized connections** | Vercel functions require connection pooling | Medium | **Yes** | Neon serverless driver handles this automatically |
-| **Database migrations** | Schema evolution is inevitable | Medium | **Yes** | Drizzle ORM migrations or similar |
-| **Soft delete** | Audit requirements, recovery from mistakes | Low | **Yes** | `deleted_at` timestamp rather than hard delete |
+---
 
-**Confidence:** HIGH - Based on [LangGraph memory documentation](https://docs.langchain.com/oss/python/langgraph/memory), [AWS DynamoDB chatbot patterns](https://aws.amazon.com/blogs/database/amazon-dynamodb-data-models-for-generative-ai-chatbots/), and [Google ADK context architecture](https://developers.googleblog.com/architecting-efficient-context-aware-multi-agent-framework-for-production/).
+## Table Stakes: Policy Engine
+
+Features users expect from a context policy engine. Missing = incomplete product.
+
+| Feature | Why Expected | Complexity | Dependencies | Notes |
+|---------|--------------|------------|--------------|-------|
+| **Threshold-triggered compaction** | Standard pattern across Claude, LangGraph, ADK | Medium | Token counting (exists) | Trigger at 80% of budget is industry standard |
+| **Summarization-based compaction** | LLM generates summary of older messages | Medium | External LLM call | All major frameworks use this approach |
+| **Configurable threshold** | Different use cases need 5k-150k token triggers | Low | Config storage | Claude docs: ranges by use case |
+| **Preserve recent messages verbatim** | Prevents model "rhythm" degradation | Low | None | Keep last 10-20 messages uncompressed |
+| **Compaction metadata** | Track what was compacted, when, by what policy | Low | Schema addition | Enables reversibility, debugging |
+| **Fork from message** | Create new context branching from specific message | Medium | Schema exists (`parentId`, `forkVersion`) | ChatGPT, LibreChat standard feature |
+| **Fork options** | Visible only, include branches, include all | Medium | Message relationship tracking | LibreChat patterns |
+| **Jump to version** | Retrieve context state at any historical version | Low | `findByVersion` (exists) | Core time-travel operation |
+| **Version history listing** | List all versions/checkpoints for a context | Low | Version column exists | Navigation for time-travel |
+| **Policy configuration** | Define compaction rules per context or globally | Medium | Config schema | Essential for customization |
+
+**Confidence:** HIGH - Based on [Claude Platform docs](https://platform.claude.com/cookbook/tool-use-automatic-context-compaction), [LangGraph time-travel](https://docs.langchain.com/oss/python/langgraph/use-time-travel), [Google ADK](https://google.github.io/adk-docs/context/compaction/).
 
 ---
 
 ## Differentiators
 
-Features that set Kata Context apart from generic storage. These enable the policy engine (v0.3.0+) to function effectively.
+Features that set Kata Context apart from other context management solutions.
 
-| Feature | Value Proposition | Complexity | v0.2.0 Scope | Notes |
-|---------|------------------|------------|--------------|-------|
-| **Full version history** | Every message append creates a new version - enables time-travel | Medium | **Yes** | Event sourcing pattern; immutable message log |
-| **Point-in-time retrieval** | Retrieve context state at any version | Medium | **Yes** | Reconstruct state from event log |
-| **Cursor-based windowing** | Efficient retrieval for token-budget-constrained windows | Medium | **Yes** | Better than offset pagination for large conversations |
-| **Token count pre-computation** | Store token counts with messages for O(1) budget checking | Low | **Yes** | Avoid re-tokenizing on every retrieval |
-| **Role-based message types** | Distinguish user/assistant/system/tool messages | Low | **Yes** | Schema design, not just string field |
-| **pgvector column** | Prepared for semantic retrieval (embeddings) | Low | **Yes, schema only** | Add column, don't populate yet |
-| **Context forking** | Branch a conversation for exploration | Medium | **Partial** | Design for it, implement basic version |
-| **Batch operations** | Efficient bulk inserts for conversation imports | Medium | **Defer** | Not critical for v0.2.0 |
-| **Snapshot optimization** | Periodic state snapshots for faster reconstruction | Medium | **Defer** | Optimization for large conversations |
+| Feature | Value Proposition | Complexity | Dependencies | Notes |
+|---------|-------------------|------------|--------------|-------|
+| **Structured compaction templates** | Custom summary prompts preserve domain-specific info | Medium | Template storage | Factory.ai shows 0.35pt accuracy improvement |
+| **Artifact tracking** | Separate index for files/resources, survives compaction | High | Artifact schema | All systems score 2.2-2.5/5 on this; unsolved |
+| **Reversible compaction** | Large outputs become file refs, retrievable on demand | Medium | File/blob storage | Claude + Deep Agents SDK pattern |
+| **Policy presets** | Pre-configured: "sequential-processing", "multi-phase" | Low | Policy config | Reduces user decision burden |
+| **Multi-level memory** | Immediate, episodic, semantic at different retention | High | Multiple storage tiers | Mem0: 26% quality gain, 90% token reduction |
+| **Sliding window with overlap** | Configurable overlap between compression windows | Low | Overlap parameter | Google ADK pattern |
+| **Iterative summary merging** | Merge new summary into persistent state | Medium | Persistent summary | Factory.ai: better than regeneration |
+| **Interval-based compaction** | Trigger every N messages vs at X tokens | Low | Scheduler config | ADK offers both patterns |
+| **Branch comparison** | Compare two forks side-by-side | Medium | Diff algorithm | Git-like workflow for agents |
+| **Checkpoint tagging** | Named checkpoints: "before-refactor", "working-state" | Low | Tag schema | Agent-Git pattern |
+| **Compaction analytics** | Track compression ratios, information preserved | Low | Metrics storage | Debugging and optimization |
 
-**Confidence:** HIGH - Based on [event sourcing patterns](https://martinfowler.com/eaaDev/EventSourcing.html), [LangGraph persistence](https://www.mongodb.com/company/blog/product-release-announcements/powering-long-term-memory-for-agents-langgraph), and [Letta memory blocks](https://www.letta.com/blog/memory-blocks).
+**Confidence:** MEDIUM - Based on [Factory.ai evaluation](https://factory.ai/news/evaluating-compression), [Agent-Git](https://github.com/HKU-MAS-Infra-Layer/Agent-Git), research papers.
 
 ---
 
 ## Anti-Features
 
-Features to explicitly NOT build in v0.2.0. Common mistakes in AI agent storage systems.
+Features to deliberately NOT build. Common mistakes in this domain.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|----------|-------------------|
-| **Embedding computation** | Adds complexity, requires model calls, separate concern | Add pgvector column in schema, populate in v0.3.0+ |
-| **Semantic search** | Requires embeddings; premature without policy engine | Store vectors when available, search in future milestone |
-| **Automatic summarization** | LLM calls in storage layer conflate concerns | Storage stores; policy engine (v0.3.0) decides when to summarize |
-| **Full chat history in every response** | Token bloat, cost explosion | Cursor-based retrieval, let policy engine decide window |
-| **Real-time sync/streaming** | Websockets add complexity, not needed for MVP | REST API sufficient; add streaming when there's demand |
-| **Multi-tenant isolation** | Authentication/authorization is separate concern | Single-tenant for v0.2.0; add multi-tenancy in commercial milestone |
-| **Caching layer** | Premature optimization | PostgreSQL is fast enough for MVP; add Redis when needed |
-| **Knowledge graph storage** | Different concern than conversation context | Focus on message sequences; knowledge graphs are future scope |
-| **Cross-session memory** | Requires memory consolidation logic (complex) | Session-scoped only for v0.2.0; long-term memory in future |
-| **Message editing/mutation** | Violates immutability principle, complicates versioning | Append-only with soft delete; "edits" create new versions |
-| **Complex query DSL** | Overengineering; REST with filters is sufficient | Simple query parameters for filtering |
-| **Automatic cleanup/retention** | Policy decision, not storage decision | Manual delete; add retention policies later |
+|--------------|-----------|-------------------|
+| **Aggressive auto-compaction without config** | Different tasks need different context amounts | Require explicit policy; sensible defaults |
+| **Lossy-only summarization** | Information loss causes expensive re-fetching | Reversible compaction first, lossy second |
+| **Context-in-summary-only** | Breaks audit trails, prevents recovery | Preserve originals; summary is view layer |
+| **Compress recent messages** | Degrades model "rhythm" and output quality | Always preserve last N messages verbatim |
+| **Single compaction strategy** | Sequential vs multi-phase vs audit need different approaches | Policy presets or user-configurable |
+| **ROUGE/embedding for eval** | Measures lexical similarity, not task resumption | Functional probes: can agent continue? |
+| **Full regeneration each compaction** | Expensive, error-prone, loses incremental insights | Iterative summary merging |
+| **Auto-fork on every edit** | Creates branching explosion | Explicit fork; edits overwrite by default |
+| **Unlimited branch depth** | Performance and complexity spiral | Cap at 10 levels or flatten old branches |
+| **Tight coupling to specific LLM** | Different models need different approaches | Pluggable summarizer interface |
+| **Synchronous compaction in hot path** | Blocks user operations | Async compaction with immediate response |
 
-**Confidence:** HIGH - Based on [AI agent memory anti-patterns](https://www.ais.com/practical-memory-patterns-for-reliable-longer-horizon-agent-workflows/), [common mistakes in agent memory](https://medium.com/@DanGiannone/the-problem-with-ai-agent-memory-9d47924e7975), and [InfoWorld analysis](https://www.infoworld.com/article/4101981/ai-memory-is-just-another-database-problem.html).
+**Confidence:** HIGH - Based on [Anthropic context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents), [Factory.ai evaluation](https://factory.ai/news/evaluating-compression), [compaction experiments](https://jxnl.co/writing/2025/08/30/context-engineering-compaction/).
 
 ---
 
 ## Feature Dependencies
 
 ```
-PostgreSQL Schema
+Existing Storage Layer (v0.2.0)
     |
-    +-- Message table (core entity)
+    +-- Token-Budget Windowing (getByTokenBudget)
     |       |
-    |       +-- Context/Session table (groups messages)
+    |       v
+    |   Threshold Detection
     |       |
-    |       +-- Version tracking (implicit via immutable appends)
+    |       +---> Compaction Trigger
+    |               |
+    |               +---> Summarization (external LLM)
+    |               |       |
+    |               |       +---> Structured Templates
+    |               |       |
+    |               |       +---> Iterative Merging
+    |               |
+    |               +---> Reversible Compaction
+    |                       |
+    |                       +---> File Reference Storage
     |
-    +-- pgvector extension (enabled but unused in v0.2.0)
+    +-- Version Tracking (version column)
+    |       |
+    |       +---> Version History Listing
+    |       |
+    |       +---> Jump to Version
+    |       |
+    |       +---> Checkpoint Tagging
+    |
+    +-- Fork Schema (parentId, forkVersion)
             |
-            +-- Embedding column (nullable, for v0.3.0+)
+            +---> Fork from Message
+            |
+            +---> Fork Options
+            |
+            +---> Branch Comparison
 
-Connection Handling
+Policy Configuration (new)
     |
-    +-- Neon serverless driver (@neondatabase/serverless)
-    |       |
-    |       +-- Automatic connection pooling
+    +---> Threshold Settings
     |
-    +-- Drizzle ORM
-            |
-            +-- Type-safe queries
-            |
-            +-- Migration management
-
-API Operations
+    +---> Policy Presets
     |
-    +-- Context CRUD
-    |       |
-    |       +-- Create context (returns context_id)
-    |       |
-    |       +-- Get context (with pagination)
-    |       |
-    |       +-- Delete context (soft delete)
-    |
-    +-- Message Operations
-            |
-            +-- Append message (immutable)
-            |
-            +-- Get messages (cursor-based)
-            |
-            +-- Get at version (point-in-time)
+    +---> Per-Context Overrides
 ```
 
 ---
 
-## Core Schema Design
+## Compaction Strategy Details
 
-### Messages Table (Event Log)
+### Strategy 1: Threshold-Based (Recommended Default)
 
-The heart of the storage layer. Each row is an immutable event.
+When context reaches X% of budget:
+1. Preserve last N messages verbatim
+2. Summarize older messages using LLM
+3. Store summary as new system message
+4. Mark original messages as "compacted" (not deleted)
+5. Update context metadata with compaction info
 
-```sql
-CREATE TABLE messages (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    context_id UUID NOT NULL REFERENCES contexts(id),
+**Thresholds by use case** (from Claude docs):
+| Threshold | Use Case | Characteristics |
+|-----------|----------|-----------------|
+| 5k-20k | Sequential entity processing | Frequent compaction, minimal accumulation |
+| 50k-100k | Multi-phase workflows | Balance retention/management |
+| 100k-150k | Tasks requiring context | Less frequent, more details |
+| Default 100k | General long-running tasks | Good balance |
 
-    -- Ordering
-    version BIGINT NOT NULL,           -- Auto-incrementing per context
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+### Strategy 2: Interval-Based
 
-    -- Content
-    role TEXT NOT NULL,                -- 'user' | 'assistant' | 'system' | 'tool'
-    content TEXT NOT NULL,
+Compact after every N messages:
+1. Count messages since last compaction
+2. When count reaches N, trigger compaction
+3. Use configurable overlap (e.g., include last 1-2 summarized messages in new summary)
 
-    -- Tool-specific (nullable)
-    tool_call_id TEXT,
-    tool_name TEXT,
+**Google ADK pattern**: compaction_interval=3, overlap_size=1
 
-    -- Metadata (denormalized for query efficiency)
-    token_count INTEGER,               -- Pre-computed for windowing
-    model TEXT,                        -- Model that generated (for assistant)
+### Strategy 3: Reversible Compaction
 
-    -- Soft delete
-    deleted_at TIMESTAMPTZ,
+For large tool outputs (>10k tokens):
+1. Store full content externally (file/blob)
+2. Replace in context with: file path + first 1k tokens preview
+3. Agent can retrieve full content via tool if needed
 
-    -- Future: embeddings
-    embedding VECTOR(1536),            -- Nullable, for v0.3.0+
-
-    -- Constraints
-    UNIQUE(context_id, version)
-);
-
-CREATE INDEX idx_messages_context_version ON messages(context_id, version);
-CREATE INDEX idx_messages_context_created ON messages(context_id, created_at);
-```
-
-### Contexts Table (Session Container)
-
-Groups messages into logical conversations.
-
-```sql
-CREATE TABLE contexts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-
-    -- Metadata
-    name TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    -- Denormalized for efficiency
-    message_count INTEGER NOT NULL DEFAULT 0,
-    total_tokens INTEGER NOT NULL DEFAULT 0,
-    latest_version BIGINT NOT NULL DEFAULT 0,
-
-    -- Forking support
-    parent_id UUID REFERENCES contexts(id),
-    fork_version BIGINT,               -- Version forked from
-
-    -- Soft delete
-    deleted_at TIMESTAMPTZ
-);
-
-CREATE INDEX idx_contexts_parent ON contexts(parent_id) WHERE parent_id IS NOT NULL;
-```
-
-**Why this design:**
-- **Immutable messages:** Append-only enables versioning without complexity
-- **Pre-computed token_count:** O(1) budget checking instead of O(n) tokenization
-- **Denormalized counters:** Avoid COUNT(*) queries on large tables
-- **Version as BIGINT:** Supports billions of messages per context
-- **Cursor-based retrieval:** Use `(context_id, version)` for efficient pagination
-
-**Confidence:** HIGH - Based on [pgvector schema patterns](https://supabase.com/docs/guides/database/extensions/pgvector), [event sourcing best practices](https://microservices.io/patterns/data/event-sourcing.html), and [DynamoDB chatbot models](https://aws.amazon.com/blogs/database/amazon-dynamodb-data-models-for-generative-ai-chatbots/).
+**From Claude Deep Agents SDK**: Trigger at 85% window, offload >20k token responses.
 
 ---
 
-## Retrieval Patterns
+## Forking Behavior Details
 
-### Pattern 1: Latest N Messages (Most Common)
+### Fork Options (LibreChat Pattern)
 
-```sql
--- Get last 50 messages, newest first
-SELECT * FROM messages
-WHERE context_id = $1 AND deleted_at IS NULL
-ORDER BY version DESC
-LIMIT 50;
-```
+**Visible Messages Only**
+- Copies only direct path to target message
+- Excludes branching alternatives
+- Minimal fork
 
-### Pattern 2: Token-Budgeted Window
+**Include Related Branches**
+- Direct path plus branches along the path
+- Balanced context preservation
 
-```sql
--- Get messages fitting within token budget, newest first
-WITH cumulative AS (
-    SELECT *,
-           SUM(token_count) OVER (ORDER BY version DESC) AS running_total
-    FROM messages
-    WHERE context_id = $1 AND deleted_at IS NULL
-)
-SELECT * FROM cumulative
-WHERE running_total <= $2  -- token budget
-ORDER BY version ASC;      -- return in chronological order
-```
+**Include All (Default)**
+- All messages leading to target, including neighbors
+- Comprehensive but larger
 
-### Pattern 3: Point-in-Time Retrieval
-
-```sql
--- Get context state at specific version
-SELECT * FROM messages
-WHERE context_id = $1
-  AND version <= $2        -- version to retrieve
-  AND deleted_at IS NULL
-ORDER BY version ASC;
-```
-
-### Pattern 4: Cursor-Based Pagination
-
-```sql
--- Get next page after cursor (version)
-SELECT * FROM messages
-WHERE context_id = $1
-  AND version > $2         -- cursor (last seen version)
-  AND deleted_at IS NULL
-ORDER BY version ASC
-LIMIT 100;
-```
-
-**Why cursor-based over offset:**
-- O(1) performance regardless of offset depth
-- Stable during concurrent writes
-- Natural fit for versioned data
-- [Better pagination performance](https://betterprogramming.pub/why-token-based-pagination-performs-better-than-offset-based-465e1139bb33)
-
----
-
-## API Surface for v0.2.0
-
-### Context Endpoints
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| POST | `/api/v1/contexts` | Create new context |
-| GET | `/api/v1/contexts/:id` | Get context metadata |
-| GET | `/api/v1/contexts/:id/messages` | Get messages (paginated) |
-| DELETE | `/api/v1/contexts/:id` | Soft delete context |
-
-### Message Endpoints
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| POST | `/api/v1/contexts/:id/messages` | Append message |
-| GET | `/api/v1/contexts/:id/messages?version=N` | Get at version |
-| GET | `/api/v1/contexts/:id/messages?cursor=X&limit=Y` | Cursor pagination |
-| GET | `/api/v1/contexts/:id/messages?token_budget=N` | Token-budgeted window |
-
-### Response Shapes
+### Fork Operations
 
 ```typescript
-interface Context {
-  id: string;
-  name: string | null;
-  messageCount: number;
-  totalTokens: number;
-  latestVersion: number;
-  parentId: string | null;
-  forkVersion: number | null;
-  createdAt: string;
-  updatedAt: string;
+interface ForkOptions {
+  sourceContextId: string;
+  fromVersion: number;        // Version to fork from
+  mode: 'visible' | 'branches' | 'all';
+  name?: string;              // Optional fork name
 }
 
-interface Message {
-  id: string;
-  contextId: string;
-  version: number;
-  role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string;
-  toolCallId: string | null;
-  toolName: string | null;
-  tokenCount: number | null;
-  model: string | null;
-  createdAt: string;
-}
-
-interface PaginatedMessages {
-  messages: Message[];
-  cursor: number | null;  // Next version to fetch, null if no more
-  hasMore: boolean;
+interface ForkResult {
+  newContextId: string;
+  copiedMessageCount: number;
+  forkVersion: number;        // Version in source where fork occurred
 }
 ```
+
+---
+
+## Time-Travel Implementation
+
+### Version History
+
+```typescript
+interface VersionHistory {
+  contextId: string;
+  versions: VersionInfo[];
+}
+
+interface VersionInfo {
+  version: number;
+  timestamp: Date;
+  messageRole: 'user' | 'assistant' | 'system' | 'tool';
+  preview: string;            // First 100 chars of message
+  tag?: string;               // Optional checkpoint tag
+}
+```
+
+### Jump to Version
+
+Already supported by `findByVersion`. Policy engine adds:
+- Caching of version snapshots for large conversations
+- Lazy loading of message content
+- Ability to "resume from version" (creates new fork)
 
 ---
 
 ## MVP Recommendation
 
-### Must Include (Ship-blocking for v0.2.0)
+### Phase 1: Basic Compaction (Ship First)
 
-1. **PostgreSQL schema** with messages and contexts tables
-2. **pgvector extension enabled** (column added, not populated)
-3. **Drizzle ORM setup** with type-safe queries
-4. **Connection pooling** via Neon serverless driver
-5. **Database migrations** that can evolve schema
-6. **Basic CRUD endpoints** for contexts and messages
-7. **Cursor-based pagination** for message retrieval
-8. **Token-budgeted retrieval** endpoint
-9. **Version tracking** for point-in-time retrieval
-10. **Soft delete** for contexts and messages
+1. **Threshold-triggered compaction** - 80% of configured budget
+2. **Summarization via LLM** - Pluggable interface, Claude default
+3. **Configurable threshold** - Per-context setting
+4. **Preserve recent verbatim** - Last 10 messages always kept
+5. **Compaction metadata** - Track when, what policy, token savings
 
-### Nice to Have (If Time Allows)
+### Phase 2: Forking
 
-1. **Context forking** (basic implementation)
-2. **Batch message append** endpoint
-3. **Context metadata** (name, description)
+1. **Fork from message** - Use existing schema
+2. **Fork options** - Visible only (simplest first)
+3. **Fork listing** - Get all forks of a context
 
-### Defer to Later Milestones
+### Phase 3: Time-Travel Enhancement
 
-| Feature | Target Milestone | Reason |
-|---------|------------------|--------|
-| Embedding computation | v0.3.0 | Requires model integration |
-| Semantic search | v0.3.0+ | Depends on embeddings |
-| Summarization | v0.3.0 | Policy engine concern |
-| Multi-tenancy | Commercial MVP | Requires auth system |
-| Caching layer | Performance milestone | Premature optimization |
-| Retention policies | Operations milestone | Policy decision |
-| Cross-session memory | Advanced features | Complex consolidation logic |
+1. **Version history endpoint** - List all versions with metadata
+2. **Checkpoint tagging** - Named versions
+3. **Resume from version** - Fork + continue workflow
+
+### Defer to Later
+
+| Feature | Why Defer | When to Build |
+|---------|-----------|---------------|
+| Artifact tracking | High complexity, unsolved problem | After user feedback |
+| Multi-level memory | Architectural complexity | Advanced features phase |
+| Branch comparison | Nice-to-have UX | When forking usage is high |
+| Structured templates | Needs domain discovery | After compaction validated |
+| Interval-based compaction | Threshold is simpler | If users request |
 
 ---
 
 ## Complexity Assessment
 
-| Feature | Complexity | Effort (days) | Risk |
-|---------|------------|---------------|------|
-| Schema design | Low | 0.5 | Low |
-| Drizzle ORM setup | Low | 0.5 | Low |
-| Neon connection | Low | 0.25 | Low - well documented |
-| Migrations | Low | 0.25 | Low |
-| Context CRUD | Low | 0.5 | Low |
-| Message append | Low | 0.25 | Low |
-| Cursor pagination | Medium | 0.5 | Low |
-| Token-budgeted retrieval | Medium | 0.5 | Medium - SQL complexity |
-| Point-in-time retrieval | Medium | 0.5 | Low |
-| Soft delete | Low | 0.25 | Low |
-| **Total** | | **~4 days** | |
+| Feature | Effort (days) | Risk | Notes |
+|---------|---------------|------|-------|
+| Compaction trigger + threshold | 1-2 | Low | Well-documented patterns |
+| LLM summarization interface | 1-2 | Low | Pluggable design |
+| Preserve recent verbatim | 0.5 | Low | Config + filtering |
+| Compaction metadata schema | 0.5 | Low | Simple addition |
+| Policy configuration | 1 | Low | Standard config pattern |
+| Fork from message | 1-2 | Low | Schema exists |
+| Fork options | 1-2 | Medium | Message traversal logic |
+| Version history endpoint | 0.5 | Low | Query existing data |
+| Checkpoint tagging | 1 | Low | Add tag column |
+| Reversible compaction | 3-5 | Medium | External storage |
+| Artifact tracking | 5-10 | High | Novel problem |
+| **Total MVP (Phases 1-3)** | **~10 days** | |
 
 ---
 
 ## Sources
 
-### HIGH Confidence (Official/Verified)
+### HIGH Confidence (Official Documentation)
 
-- [LangGraph Memory Overview](https://docs.langchain.com/oss/python/langgraph/memory) - Memory patterns for AI agents
-- [Supabase pgvector Documentation](https://supabase.com/docs/guides/database/extensions/pgvector) - Vector storage patterns
-- [Event Sourcing - Martin Fowler](https://martinfowler.com/eaaDev/EventSourcing.html) - Event sourcing fundamentals
-- [AWS DynamoDB Chatbot Data Models](https://aws.amazon.com/blogs/database/amazon-dynamodb-data-models-for-generative-ai-chatbots/) - Conversation storage patterns
+- [Claude Platform: Automatic Context Compaction](https://platform.claude.com/cookbook/tool-use-automatic-context-compaction) - Threshold guidelines, implementation patterns
+- [LangGraph: Time Travel](https://docs.langchain.com/oss/python/langgraph/use-time-travel) - Checkpoint management, state replay, branching
+- [Google ADK: Context Compression](https://google.github.io/adk-docs/context/compaction/) - Interval-based compaction, overlap configuration
+- [Anthropic: Effective Context Engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) - Compaction strategies, note-taking patterns
+- [LangChain: Context Management for Deep Agents](https://blog.langchain.com/context-management-for-deepagents/) - Offloading patterns, summarization
 
-### MEDIUM Confidence (Multiple Sources Agree)
+### MEDIUM Confidence (Verified Technical Sources)
 
-- [Memory for AI Agents - The New Stack](https://thenewstack.io/memory-for-ai-agents-a-new-paradigm-of-context-engineering/) - Context engineering paradigm
-- [Google ADK Context Architecture](https://developers.googleblog.com/architecting-efficient-context-aware-multi-agent-framework-for-production/) - Tiered storage patterns
-- [Cursor-Based Pagination Performance](https://betterprogramming.pub/why-token-based-pagination-performs-better-than-offset-based-465e1139bb33) - Why cursors outperform offsets
-- [LLM Context Management Guide](https://eval.16x.engineer/blog/llm-context-management-guide) - Context window best practices
+- [Factory.ai: Evaluating Compression](https://factory.ai/news/evaluating-compression) - Compaction evaluation framework, accuracy metrics
+- [LibreChat: Forking](https://www.librechat.ai/docs/features/fork) - Fork options, use cases
+- [Will Larson: Context Window Compaction](https://lethain.com/agents-context-compaction/) - Threshold implementation, virtual files
+- [ChatGPT Branched Chats](https://medium.com/@CherryZhouTech/chatgpt-launches-branched-chats-effortless-multi-threaded-conversations-d188b90bd78b) - User-facing forking patterns
 
-### LOW Confidence (Single Source - Verify Before Implementing)
+### LOW Confidence (Research/Community)
 
-- Specific token count storage strategies may vary by embedding model
-- pgvector index tuning (HNSW vs IVFFlat) requires benchmarking with real data
-- Optimal snapshot frequency for large conversations needs empirical testing
+- [Agent-Git](https://github.com/HKU-MAS-Infra-Layer/Agent-Git) - Git-like version control for agents
+- [Forky](https://ishan.rs/posts/forky-git-style-llm-history) - Tree-based conversation history
+- [Jason Liu: Compaction Experiments](https://jxnl.co/writing/2025/08/30/context-engineering-compaction/) - Research directions
+- [Mem0 Memory Systems](https://mem0.ai/blog/llm-chat-history-summarization-guide-2025) - Multi-level memory patterns

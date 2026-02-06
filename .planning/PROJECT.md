@@ -8,6 +8,16 @@ A standalone context policy engine for AI agents. Manages what goes in and out o
 
 Given messages and a context budget, determine the optimal window to send to the model. Policy, not storage.
 
+## Current Milestone: v0.3.0 Policy Engine
+
+**Goal:** Implement the core context management logic with compaction policies, context forking, and time-travel capabilities.
+
+**Target features:**
+- Configurable compaction policies (which messages to keep/discard)
+- Smart windowing (budget-aware context selection)
+- Context forking (branch conversations for exploration)
+- Time-travel (reconstruct context at any version)
+
 ## Current State
 
 **Shipped:** v0.2.0 Database + Storage Layer (2026-02-04)
@@ -133,4 +143,4 @@ pnpm 10.x, Node.js 24.x, TypeScript 5.9.x, Biome 2.3.x, Vitest 4.x, Zod 4.x, Dri
 | RFC 9457 error format | Standard problem detail for API error responses | Good |
 
 ---
-*Last updated: 2026-02-04 after v0.2.0 milestone*
+*Last updated: 2026-02-05 — v0.3.0 milestone started*
