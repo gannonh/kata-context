@@ -1,4 +1,5 @@
 import { z } from "zod/v4";
+import { policyConfigSchema } from "../../validation/policy.js";
 
 /**
  * Schema for creating a new context
@@ -6,6 +7,7 @@ import { z } from "zod/v4";
  */
 export const createContextSchema = z.object({
   name: z.string().max(255).optional(),
+  policyConfig: policyConfigSchema.optional(),
 });
 
 export type CreateContextSchemaInput = z.infer<typeof createContextSchema>;

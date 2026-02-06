@@ -1,8 +1,9 @@
 import type { Context, Message, NewContext, NewMessage } from "../db/schema/index.js";
+import type { PolicyConfig } from "../validation/policy.js";
 
 // Input types - what callers provide (excludes auto-generated fields)
 export type CreateContextInput = Pick<NewContext, "name"> & {
-  metadata?: Record<string, unknown>; // Future: stored in separate column
+  policyConfig?: PolicyConfig;
 };
 
 // Pagination
