@@ -59,7 +59,7 @@ Policy-based context window management for AI agents. This roadmap covers the co
 
 ---
 
-### Phase 1: Infrastructure + Policy Foundation
+### Phase 6: Infrastructure + Policy Foundation
 
 **Goal:** Establish infrastructure dependencies and policy configuration storage for subsequent phases.
 
@@ -81,11 +81,11 @@ Policy-based context window management for AI agents. This roadmap covers the co
 
 ---
 
-### Phase 2: Forking + Time-Travel
+### Phase 7: Forking + Time-Travel
 
 **Goal:** Enable conversation branching and historical state reconstruction using existing version semantics.
 
-**Dependencies:** Phase 1 (schema changes must be applied)
+**Dependencies:** Phase 6 (schema changes must be applied)
 
 **Requirements:**
 - FORK-01: User can create a fork from any version of a context
@@ -105,11 +105,11 @@ Policy-based context window management for AI agents. This roadmap covers the co
 
 ---
 
-### Phase 3: Compaction Core
+### Phase 8: Compaction Core
 
 **Goal:** Implement threshold-triggered compaction with configurable preservation and metadata tracking.
 
-**Dependencies:** Phase 1 (policy configuration), Phase 2 (version semantics validated)
+**Dependencies:** Phase 6 (policy configuration), Phase 7 (version semantics validated)
 
 **Requirements:**
 - COMP-01: System can detect when context reaches configurable token threshold
@@ -128,11 +128,11 @@ Policy-based context window management for AI agents. This roadmap covers the co
 
 ---
 
-### Phase 4: API Layer
+### Phase 9: API Layer
 
 **Goal:** Expose forking, time-travel, compaction, and policy operations via REST endpoints.
 
-**Dependencies:** Phases 1-3 (all core functionality must exist)
+**Dependencies:** Phases 6-8 (all core functionality must exist)
 
 **Requirements:**
 - API-01: POST /contexts/:id/compact - trigger compaction for a context
