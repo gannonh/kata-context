@@ -1,6 +1,8 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this package.
+
+**Important:** Keep this file and the root `CLAUDE.md` up-to-date whenever functionality changes.
 
 ## Build & Development Commands
 
